@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -57,6 +57,8 @@ static int mipi_dsi_remove(struct platform_device *pdev);
 
 static int mipi_dsi_off(struct platform_device *pdev);
 static int mipi_dsi_on(struct platform_device *pdev);
+static int mipi_dsi_fps_level_change(struct platform_device *pdev,
+					u32 fps_level);
 static int mipi_dsi_low_power_config(struct platform_device *pdev,
 					int enable);
 
@@ -98,6 +100,14 @@ static int mipi_dsi_low_power_config(struct platform_device *pdev,
 		ret = mipi_dsi_pdata->panel_lp_en(enable);
 
 	return ret;
+}
+
+static int mipi_dsi_fps_level_change(struct platform_device *pdev,
+					u32 fps_level)
+{
+	mipi_dsi_wait4video_done();
+	mipi_dsi_configure_fb_divider(fps_level);
+	return 0;
 }
 
 static int mipi_dsi_off(struct platform_device *pdev)
@@ -686,6 +696,7 @@ static int mipi_dsi_probe(struct platform_device *pdev)
 	pdata = mdp_dev->dev.platform_data;
 	pdata->on = mipi_dsi_on;
 	pdata->off = mipi_dsi_off;
+	pdata->fps_level_change = mipi_dsi_fps_level_change;
 	pdata->low_power_config = mipi_dsi_low_power_config;
 	pdata->late_init = mipi_dsi_late_init;
 	pdata->next = pdev;
