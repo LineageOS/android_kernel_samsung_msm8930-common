@@ -638,7 +638,7 @@ int msm_mctl_pp_done(
 			msm_mctl_pp_path_to_img_mode(frame.path);
 		image_mode = buf_handle.image_mode;
 	}
-	if (image_mode < 0) {
+	if (image_mode < 0 || image_mode >= MSM_MAX_IMG_MODE) {
 		pr_err("%s Invalid image mode\n", __func__);
 		return image_mode;
 	}
