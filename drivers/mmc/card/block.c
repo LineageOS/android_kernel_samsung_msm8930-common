@@ -2161,10 +2161,16 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 	}
 
 out:
-	if (!req && !(mq->flags & MMC_QUEUE_NEW_REQUEST)) {
+	if ((!req && !(mq->flags & MMC_QUEUE_NEW_REQUEST)) ||
+	     (req && (req->cmd_flags & MMC_REQ_SPECIAL_MASK))) {
 		if (mmc_card_need_bkops(card))
 			mmc_start_bkops(card, false);
-		/* release host only when there are no more requests */
+		/*
+		 * Release host when there are no more requests
+		 * and after special request(discard, flush) is done.
+		 * In case sepecial request, there is no reentry to
+		 * the 'mmc_blk_issue_rq' with 'mqrq_prev->req'.
+		 */
 		mmc_release_host(card->host);
 	}
 	return ret;
