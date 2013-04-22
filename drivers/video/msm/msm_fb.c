@@ -282,6 +282,9 @@ static ssize_t msm_fb_fps_level_change(struct device *dev,
 	unsigned long val;
 	int ret;
 
+	if (mfd->panel.type != MIPI_VIDEO_PANEL)
+		return -EINVAL;
+
 	ret = kstrtoul(buf, 10, &val);
 	if (ret)
 		return ret;
@@ -419,7 +422,7 @@ void mdp_restore_rgb(void)
 }
 
 static DEVICE_ATTR(msm_fb_type, S_IRUGO, msm_fb_msm_fb_type, NULL);
-static DEVICE_ATTR(msm_fb_fps_level, S_IRUGO | S_IWUGO, NULL, \
+static DEVICE_ATTR(msm_fb_fps_level, S_IRUGO | S_IWUSR | S_IWGRP, NULL, \
 				msm_fb_fps_level_change);
 static DEVICE_ATTR(rgb, S_IRUGO | S_IWUSR | S_IWGRP, mdp_get_rgb, \
                                 mdp_set_rgb);
