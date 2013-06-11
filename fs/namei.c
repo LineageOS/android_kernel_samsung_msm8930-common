@@ -2506,8 +2506,14 @@ static int do_tmpfile(int dfd, const char* pathname,
 		goto out2;
 	file->f_path.mnt = nd->path.mnt;
 	file = lookup_instantiate_filp(nd, dentry, generic_file_open);
-	if (IS_ERR(file))
+	if (IS_ERR(file)) {
 		error = PTR_ERR(file);
+	} else if (!(op->open_flag & O_EXCL)) {
+		struct inode *inode = file->f_path.dentry->d_inode;
+		spin_lock(&inode->i_lock);
+		inode->i_state |= I_LINKABLE;
+		spin_unlock(&inode->i_lock);
+	}
 out2:
 	mnt_drop_write(nd->path.mnt);
 out:
@@ -3188,12 +3194,18 @@ int vfs_link2(struct vfsmount *mnt, struct dentry *old_dentry, struct inode *dir
 
 	mutex_lock(&inode->i_mutex);
 	/* Make sure we don't allow creating hardlink to an unlinked file */
-	if (inode->i_nlink == 0)
+	if (inode->i_nlink == 0 && !(inode->i_state & I_LINKABLE))
 		error =  -ENOENT;
 	else if (max_links && inode->i_nlink >= max_links)
 		error = -EMLINK;
 	else
 		error = dir->i_op->link(old_dentry, dir, new_dentry);
+
+	if (!error && (inode->i_state & I_LINKABLE)) {
+		spin_lock(&inode->i_lock);
+		inode->i_state &= ~I_LINKABLE;
+		spin_unlock(&inode->i_lock);
+	}
 	mutex_unlock(&inode->i_mutex);
 	if (!error)
 		fsnotify_link(dir, inode, new_dentry);
