@@ -49,6 +49,8 @@ __asm__ __volatile__ (							\
 #define MSM_IOMMU_ATTR_CACHED_WB_NWA	0x2
 #define MSM_IOMMU_ATTR_CACHED_WT	0x3
 
+static int msm_iommu_unmap_range(struct iommu_domain *domain, unsigned int va,
+				 unsigned int len);
 
 static inline void clean_pte(unsigned long *start, unsigned long *end,
 			     int redirect)
@@ -858,6 +860,7 @@ static int msm_iommu_map_range(struct iommu_domain *domain, unsigned int va,
 			       int prot)
 {
 	unsigned int pa;
+	unsigned int start_va = va;
 	unsigned int offset = 0;
 	unsigned long *fl_table;
 	unsigned long *fl_pte;
@@ -926,12 +929,6 @@ static int msm_iommu_map_range(struct iommu_domain *domain, unsigned int va,
 				chunk_offset = 0;
 				sg = sg_next(sg);
 				pa = get_phys_addr(sg);
-				if (pa == 0) {
-					pr_debug("No dma address for sg %p\n",
-							sg);
-					ret = -EINVAL;
-					goto fail;
-				}
 			}
 			continue;
 		}
@@ -985,12 +982,6 @@ static int msm_iommu_map_range(struct iommu_domain *domain, unsigned int va,
 				chunk_offset = 0;
 				sg = sg_next(sg);
 				pa = get_phys_addr(sg);
-				if (pa == 0) {
-					pr_debug("No dma address for sg %p\n",
-							sg);
-					ret = -EINVAL;
-					goto fail;
-				}
 			}
 		}
 
@@ -1003,6 +994,8 @@ static int msm_iommu_map_range(struct iommu_domain *domain, unsigned int va,
 	__flush_iotlb(domain);
 fail:
 	mutex_unlock(&msm_iommu_lock);
+	if (ret && offset > 0)
+		msm_iommu_unmap_range(domain, start_va, offset);
 	return ret;
 }
 
