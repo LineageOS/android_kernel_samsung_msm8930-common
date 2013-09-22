@@ -24,7 +24,7 @@ int vfs_readdir(struct file *file, filldir_t filler, void *buf)
 {
 	struct inode *inode = file->f_path.dentry->d_inode;
 	int res = -ENOTDIR;
-	if (!file->f_op || !file->f_op->readdir)
+	if (!file->f_op->readdir)
 		goto out;
 
 	res = security_file_permission(file, MAY_READ);

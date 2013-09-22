@@ -388,9 +388,6 @@ static int coda_readdir(struct file *coda_file, void *buf, filldir_t filldir)
 	BUG_ON(!cfi || cfi->cfi_magic != CODA_MAGIC);
 	host_file = cfi->cfi_container;
 
-	if (!host_file->f_op)
-		return -ENOTDIR;
-
 	if (host_file->f_op->readdir)
 	{
 		/* potemkin case: we were handed a directory inode.
