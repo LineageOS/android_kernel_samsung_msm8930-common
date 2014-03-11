@@ -88,9 +88,9 @@ enum {
 
 	/*
 	 * Rescue workers are used only on emergencies and shared by
-	 * all cpus.  Give -20.
+	 * all cpus.  Give MIN_NICE.
 	 */
-	RESCUER_NICE_LEVEL	= -20,
+	RESCUER_NICE_LEVEL	= MIN_NICE,
 };
 
 /*
