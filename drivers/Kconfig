@@ -164,4 +164,6 @@ source "drivers/motor/Kconfig"
 
 source "drivers/samsung/Kconfig"
 
+source "drivers/android/Kconfig"
+
 endmenu
