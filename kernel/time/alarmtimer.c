@@ -327,7 +327,7 @@ ktime_t alarm_expires_remaining(const struct alarm *alarm)
  * set an rtc timer to fire that far into the future, which
  * will wake us from suspend.
  */
-#if defined(CONFIG_RTC_DRV_QPNP) && defined(CONFIG_MSM_PM)
+#ifdef CONFIG_MSM_PM
 extern void lpm_suspend_wake_time(uint64_t wakeup_time);
 static int alarmtimer_suspend(struct device *dev)
 {

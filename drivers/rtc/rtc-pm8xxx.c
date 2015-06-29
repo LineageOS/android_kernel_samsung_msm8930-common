@@ -35,6 +35,12 @@
 
 #define NUM_8_BIT_RTC_REGS		0x4
 
+/* Module parameter to control power-on-alarm */
+bool poweron_alarm;
+module_param(poweron_alarm, bool, 0644);
+MODULE_PARM_DESC(poweron_alarm, "Enable/Disable power-on alarm");
+EXPORT_SYMBOL(poweron_alarm);
+
 /**
  * struct pm8xxx_rtc -  rtc driver internal structure
  * @rtc:		rtc device for this driver.
@@ -553,7 +559,7 @@ static void pm8xxx_rtc_shutdown(struct platform_device *pdev)
 	if (pdata != NULL)
 		rtc_alarm_powerup =  pdata->rtc_alarm_powerup;
 
-	if (!rtc_alarm_powerup) {
+	if (!rtc_alarm_powerup && !poweron_alarm) {
 
 		spin_lock_irqsave(&rtc_dd->ctrl_reg_lock, irq_flags);
 		dev_dbg(&pdev->dev, "Disabling alarm interrupts\n");
