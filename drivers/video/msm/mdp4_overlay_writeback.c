@@ -445,8 +445,10 @@ int mdp4_wfd_pipe_commit(struct msm_fb_data_type *mfd,
 	mdp4_stat.overlay_commit[pipe->mixer_num]++;
 
 	if (wait) {
+		mutex_unlock(&vctrl->mfd->dma->ov_mutex);
 		mdp4_wfd_wait4ov(cndx);
 		mdp_clk_ctrl(0);
+		mutex_lock(&vctrl->mfd->dma->ov_mutex);
 	}
 
 	mdp4_wfd_queue_wakeup(mfd, node);
