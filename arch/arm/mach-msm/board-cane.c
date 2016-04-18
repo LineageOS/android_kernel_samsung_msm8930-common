@@ -89,7 +89,6 @@
 #include <mach/ion.h>
 #include <mach/mdm2.h>
 #include <mach/msm_rtb.h>
-#include <linux/fmem.h>
 #include <mach/msm_cache_dump.h>
 
 #include <mach/kgsl.h>
@@ -1336,9 +1335,6 @@ static void samsung_sys_class_init(void)
 	pr_info("samsung sys class end.\n");
 };
 
-struct fmem_platform_data msm8930_fmem_pdata = {
-};
-
 #define DSP_RAM_BASE_8960 0x8da00000
 #define DSP_RAM_SIZE_8960 0x1800000
 static int dspcrashd_pdata_8960 = 0xDEADDEAD;
@@ -1383,14 +1379,11 @@ static int msm8930_paddr_to_memtype(unsigned int paddr)
 	return MEMTYPE_EBI1;
 }
 
-#define FMEM_ENABLED 0
 #ifdef CONFIG_ION_MSM
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
 static struct ion_cp_heap_pdata cp_mm_msm8930_ion_pdata = {
 	.permission_type = IPT_TYPE_MM_CARVEOUT,
 	.align = PAGE_SIZE,
-	.reusable = FMEM_ENABLED,
-	.mem_is_fmem = FMEM_ENABLED,
 	.fixed_position = FIXED_MIDDLE,
 	.is_cma	= 1,
 	.no_nonsecure_alloc = 1,
@@ -1399,8 +1392,6 @@ static struct ion_cp_heap_pdata cp_mm_msm8930_ion_pdata = {
 static struct ion_cp_heap_pdata cp_mfc_msm8930_ion_pdata = {
 	.permission_type = IPT_TYPE_MFC_SHAREDMEM,
 	.align = PAGE_SIZE,
-	.reusable = 0,
-	.mem_is_fmem = FMEM_ENABLED,
 	.fixed_position = FIXED_HIGH,
 	.no_nonsecure_alloc = 1,
 };
@@ -1408,13 +1399,11 @@ static struct ion_cp_heap_pdata cp_mfc_msm8930_ion_pdata = {
 static struct ion_co_heap_pdata co_msm8930_ion_pdata = {
 	.adjacent_mem_id = INVALID_HEAP_ID,
 	.align = PAGE_SIZE,
-	.mem_is_fmem = 0,
 };
 
 static struct ion_co_heap_pdata fw_co_msm8930_ion_pdata = {
 	.adjacent_mem_id = ION_CP_MM_HEAP_ID,
 	.align = SZ_128K,
-	.mem_is_fmem = FMEM_ENABLED,
 	.fixed_position = FIXED_LOW,
 };
 #endif
@@ -1529,12 +1518,6 @@ static struct platform_device msm8930_ion_dev = {
 };
 #endif
 
-struct platform_device msm8930_fmem_device = {
-	.name = "fmem",
-	.id = 1,
-	.dev = { .platform_data = &msm8930_fmem_pdata },
-};
-
 static void __init reserve_mem_for_ion(enum ion_memory_types mem_type,
 				      unsigned long size)
 {
@@ -1591,15 +1574,10 @@ static void __init msm8930_reserve_fixed_area(unsigned long fixed_area_size)
 }
 
 /**
- * Reserve memory for ION and calculate amount of reusable memory for fmem.
- * We only reserve memory for heaps that are not reusable. However, we only
- * support one reusable heap at the moment so we ignore the reusable flag for
- * other than the first heap with reusable flag set. Also handle special case
+ * Reserve memory for ION. Also handle special case
  * for video heaps (MM,FW, and MFC). Video requires heaps MM and MFC to be
  * at a higher address than FW in addition to not more than 256MB away from the
- * base address of the firmware. This means that if MM is reusable the other
- * two heaps must be allocated in the same region as FW. This is handled by the
- * mem_is_fmem flag in the platform data. In addition the MM heap must be
+ * base address of the firmware. In addition the MM heap must be
  * adjacent to the FW heap for content protection purposes.
  */
 static void __init reserve_ion_memory(void)
@@ -3910,7 +3888,6 @@ static struct platform_device *common_devices[] __initdata = {
 #ifdef CONFIG_MSM_FAKE_BATTERY
 	&fish_battery_device,
 #endif
-	&msm8930_fmem_device,
 	&msm_device_bam_dmux,
 	&msm_fm_platform_init,
 
