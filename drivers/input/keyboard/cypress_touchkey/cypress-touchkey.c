@@ -101,6 +101,7 @@ struct cypress_touchkey_info {
 	struct mutex			fw_lock;
 	struct workqueue_struct			*led_wq;
 	struct work_struct			led_work;
+	atomic_t			touchkey_enable;
 #endif
 };
 
@@ -211,6 +212,10 @@ static irqreturn_t cypress_touchkey_interrupt(int irq, void *dev_id)
 	int code;
 	int press;
 	int ret;
+
+	if (!atomic_read(&info->touchkey_enable)) {
+		goto out;
+	}
 
 	ret = gpio_get_value(info->pdata->gpio_int);
 	/*if (ret) {
@@ -835,6 +840,44 @@ static ssize_t autocalibration_status(struct device *dev,
 		return snprintf(buf, 10, "Disabled\n");
 }
 #endif
+
+static ssize_t touchkey_enable_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct cypress_touchkey_info *info = dev_get_drvdata(dev);
+
+	return sprintf(buf, "%d\n", atomic_read(&info->touchkey_enable));
+}
+
+static ssize_t touchkey_enable_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct cypress_touchkey_info *info = dev_get_drvdata(dev);
+	int i = 0;
+	unsigned long val = 0;
+	bool enable = 0;
+
+	if (strict_strtoul(buf, 16, &val))
+		return -EINVAL;
+
+	enable = (val == 0 ? 0 : 1);
+	atomic_set(&info->touchkey_enable, enable);
+	if (enable) {
+                for (i = 0; i < ARRAY_SIZE(info->keycode); i++) {
+			set_bit(info->keycode[i], info->input_dev->keybit);
+		}
+	} else {
+                for (i = 0; i < ARRAY_SIZE(info->keycode); i++) {
+			clear_bit(info->keycode[i], info->input_dev->keybit);
+		}
+	}
+	input_sync(info->input_dev);
+
+	return count;
+}
+
+static DEVICE_ATTR(touchkey_enable, S_IRUGO|S_IWUSR, touchkey_enable_show,
+	      touchkey_enable_store);
 static DEVICE_ATTR(touchkey_firm_update, S_IWUSR | S_IWGRP,
 				NULL, touch_update_write);
 static DEVICE_ATTR(touchkey_firm_update_status,
@@ -874,6 +917,7 @@ static DEVICE_ATTR(touchkey_brightness_level, S_IRUGO | S_IWUSR | S_IWGRP,
 #endif
 
 static struct attribute *touchkey_attributes[] = {
+	&dev_attr_touchkey_enable.attr,
 	&dev_attr_touchkey_firm_update.attr,
 	&dev_attr_touchkey_firm_update_status.attr,
 	&dev_attr_touchkey_firm_version_phone.attr,
@@ -976,6 +1020,9 @@ static int __devinit cypress_touchkey_probe(struct i2c_client *client,
 	set_bit(EV_KEY, input_dev->evbit);
 	set_bit(EV_LED, input_dev->evbit);
 	set_bit(LED_MISC, input_dev->ledbit);
+
+	atomic_set(&info->touchkey_enable, 1);
+
 	for (i = 0; i < ARRAY_SIZE(info->keycode); i++)
 		set_bit(info->keycode[i], input_dev->keybit);
 
