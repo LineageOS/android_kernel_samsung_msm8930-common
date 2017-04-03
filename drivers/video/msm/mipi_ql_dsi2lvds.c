@@ -620,7 +620,7 @@ static ssize_t siop_enable_show(struct device *dev,
 {
 	int rc;
 
-	rc = snprintf((char *)buf, sizeof(buf), "%d\n",msd.dstat.cabc);
+	rc = snprintf((char *)buf, (int)sizeof(buf), "%d\n",msd.dstat.cabc);
 	pr_info("%s :[MIPI2LVDS] CABC: %d\n", __func__, msd.dstat.cabc);
 	return rc;
 }
@@ -676,7 +676,7 @@ static ssize_t mipi2lvds_auto_brightness_show(struct device *dev,
 {
 	int rc;
 
-	rc = snprintf((char *)buf, sizeof(buf), "%d\n",
+	rc = snprintf((char *)buf, (int)sizeof(buf), "%d\n",
 					msd.dstat.auto_brightness);
 	pr_info("%s :[MIPI2LVDS] auto_brightness : %d\n", __func__, msd.dstat.auto_brightness);
 

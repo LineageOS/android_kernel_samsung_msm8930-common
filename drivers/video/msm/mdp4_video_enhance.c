@@ -811,7 +811,7 @@ static ssize_t cabc_show(struct device *dev,
 	int rc;
 	unsigned char cabc;
 	cabc = mipi2lvds_show_cabc();
-	rc = snprintf((char *)buf, sizeof(buf), "%d\n",cabc);
+	rc = snprintf((char *)buf, (int)sizeof(buf), "%d\n",cabc);
 	pr_info("%s :[MIPI2LVDS] CABC: %d\n", __func__, cabc);
 	return rc;
 
