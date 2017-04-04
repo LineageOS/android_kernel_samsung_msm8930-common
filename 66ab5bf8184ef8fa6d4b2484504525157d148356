@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9a5c5d37_ea01673a",
+        "filename": "drivers/video/msm/mdp4_video_enhance.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 814,
+      "author": {
+        "id": 444
+      },
+      "writtenOn": "2017-04-04T15:38:12Z",
+      "side": 1,
+      "message": "Better change it to use sprintf instead. Here and the other places.\n\nExample:\nrc \u003d sprintf((char *)buf, \"%d\\n\",cabc);",
+      "revId": "66ab5bf8184ef8fa6d4b2484504525157d148356",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
