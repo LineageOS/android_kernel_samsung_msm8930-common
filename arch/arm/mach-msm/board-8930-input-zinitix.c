@@ -199,7 +199,7 @@ static struct bt532_ts_platform_data bt532_ts_pdata = {
 	.vdd_on		= zinitix_vdd_on,
 	.is_vdd_on	= is_zinitix_vdd_on,
 	.register_cb	= zinitix_register_callback,
-	.orientation	= 0,
+	.orientation	= 6,
 };
 
 static struct i2c_board_info zinitix_info[] __initdata = {
