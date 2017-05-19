@@ -1937,7 +1937,6 @@ static int get_fuelgauge_soc(struct i2c_client *client)
 	int fg_vcell;
 	int fg_current;
 	int avg_current;
-	ktime_t	current_time;
 	struct timespec ts;
 	int fullcap_check_interval;
 
@@ -1945,8 +1944,7 @@ static int get_fuelgauge_soc(struct i2c_client *client)
 		if (fuelgauge_recovery_handler(client))
 			goto return_soc;
 
-	current_time = alarm_get_elapsed_realtime();
-	ts = ktime_to_timespec(current_time);
+	get_monotonic_boottime(&ts);
 
 	/* check fullcap range */
 	fullcap_check_interval =
@@ -2080,12 +2078,10 @@ bool sec_hal_fg_init(struct i2c_client *client)
 {
 	struct sec_fuelgauge_info *fuelgauge =
 				i2c_get_clientdata(client);
-	ktime_t	current_time;
 	struct timespec ts;
 	u8 data[2];
 
-	current_time = alarm_get_elapsed_realtime();
-	ts = ktime_to_timespec(current_time);
+	get_monotonic_boottime(&ts);
 
 	fuelgauge->info.fullcap_check_interval = ts.tv_sec;
 
