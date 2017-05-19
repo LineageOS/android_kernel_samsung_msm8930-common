@@ -16,7 +16,7 @@
 #include <linux/moduleparam.h>
 #include <linux/platform_device.h>
 #include <linux/errno.h>
-#include <linux/android_alarm.h>
+#include <linux/hrtimer.h>
 #include <linux/mfd/pm8xxx/pm8921-charger.h>
 #include <linux/mfd/pm8xxx/pm8921-sec-charger.h>
 #include <linux/mfd/pm8xxx/pm8921-sec-attrs.h>
@@ -327,10 +327,10 @@ struct pm8921_chg_chip {
 	/* event set */
 	unsigned int event;
 	unsigned int event_wait;
-	struct alarm event_termination_alarm;
+	struct hrtimer event_termination_hrtimer;
 	ktime_t	last_event_time;
 
-	struct alarm update_alarm;
+	struct hrtimer update_hrtimer;
 	ktime_t last_update_time;
 
 	int (*get_cable_type)(void);
@@ -572,11 +572,9 @@ static int pm_chg_usb_suspend_enable(struct pm8921_chg_chip *chip, int enable)
 #define CHG_EN_BIT	BIT(7)
 static int pm_chg_auto_enable(struct pm8921_chg_chip *chip, int enable)
 {
-	ktime_t current_time;
 	struct timespec ts;
 
-	current_time = alarm_get_elapsed_realtime();
-	ts = ktime_to_timespec(current_time);
+	get_monotonic_boottime(&ts);
 
 	if (enable) { /* Charging */
 		if (chip->initial_count <= 0) {
@@ -2186,11 +2184,9 @@ static void pm8917_disable_charging(struct pm8921_chg_chip *chip)
 
 static void pm8917_enable_charging(struct pm8921_chg_chip *chip)
 {
-	ktime_t current_time;
 	struct timespec ts;
 
-	current_time = alarm_get_elapsed_realtime();
-	ts = ktime_to_timespec(current_time);
+	get_monotonic_boottime(&ts);
 
 	switch (chip->cable_type) {
 	case CABLE_TYPE_USB:
@@ -2442,23 +2438,28 @@ static void  sec_bat_event_program_alarm(
 	struct pm8921_chg_chip *chip, int seconds)
 {
 	ktime_t low_interval = ktime_set(seconds - 10, 0);
-	ktime_t slack = ktime_set(20, 0);
 	ktime_t next;
 
 	next = ktime_add(chip->last_event_time, low_interval);
-	alarm_start_range(&chip->event_termination_alarm,
-		next, ktime_add(next, slack));
+	/* The original slack time called for, 20 seconds, exceeds
+	 * the length allowed for an unsigned long in nanoseconds. Use
+	 * ULONG_MAX instead
+	 */
+	hrtimer_start_range_ns(&chip->event_termination_hrtimer,
+		next, ULONG_MAX, HRTIMER_MODE_ABS);
 }
 
-static void sec_bat_event_expired_timer_func(struct alarm *alarm)
+enum hrtimer_restart sec_bat_event_expired_timer_func(struct hrtimer *timer)
 {
 	struct pm8921_chg_chip *chip =
-		container_of(alarm, struct pm8921_chg_chip,
-			event_termination_alarm);
+		container_of(timer, struct pm8921_chg_chip,
+			event_termination_hrtimer);
 
 	chip->event &= (~chip->event_wait);
 	dev_info(chip->dev,
 		"%s: event expired (0x%x)\n", __func__, chip->event);
+
+	return HRTIMER_NORESTART;
 }
 
 static void sec_bat_event_set(
@@ -2477,7 +2478,7 @@ static void sec_bat_event_set(
 		return;
 	}
 
-	alarm_cancel(&chip->event_termination_alarm);
+	hrtimer_cancel(&chip->event_termination_hrtimer);
 	chip->event &= (~chip->event_wait);
 
 	if (enable) {
@@ -2493,7 +2494,7 @@ static void sec_bat_event_set(
 			return;	/* nothing to clear */
 		}
 		chip->event_wait = event;
-		chip->last_event_time = alarm_get_elapsed_realtime();
+		chip->last_event_time = ktime_get_boottime();
 
 		sec_bat_event_program_alarm(chip,
 			chip->batt_pdata->event_waiting_time);
@@ -3711,7 +3712,7 @@ static void handle_cable_insertion_removal(struct pm8921_chg_chip *chip)
 		break;
 	}
 
-	alarm_cancel(&chip->event_termination_alarm);
+	hrtimer_cancel(&chip->event_termination_hrtimer);
 	wake_lock(&chip->monitor_wake_lock);
 	schedule_delayed_work(&chip->update_heartbeat_work, 0);
 
@@ -4588,36 +4589,39 @@ static void pm_batt_external_power_changed(struct power_supply *psy)
 					 __pm_batt_external_power_changed_work);
 }
 
-static void pm_update_alarm(struct alarm *alarm)
+enum hrtimer_restart pm_update_alarm(struct hrtimer *timer)
 {
-	struct pm8921_chg_chip *chip = container_of(alarm,
-				struct pm8921_chg_chip, update_alarm);
+	struct pm8921_chg_chip *chip = container_of(timer,
+				struct pm8921_chg_chip, update_hrtimer);
 
 	if (!chip->is_in_sleep) {
 		wake_lock(&chip->monitor_wake_lock);
 		schedule_delayed_work(&chip->update_heartbeat_work, 0);
 	}
+
+	return HRTIMER_NORESTART;
 }
 
 static void pm_program_alarm(struct pm8921_chg_chip *chip, int seconds)
 {
 	ktime_t low_interval = ktime_set(seconds, 0);
-	ktime_t slack = ktime_set(10, 0);
 	ktime_t next;
 
 	next = ktime_add(chip->last_update_time, low_interval);
-	alarm_start_range(&chip->update_alarm,
-			next, ktime_add(next, slack));
+	/* The original slack time called for, 10 seconds, exceeds
+	 * the length allowed for an unsigned long in nanoseconds. Use
+	 * ULONG_MAX instead
+	 */
+	hrtimer_start_range_ns(&chip->update_hrtimer,
+		next, ULONG_MAX, HRTIMER_MODE_ABS);
 }
 
 static bool pm_abs_time_management(struct pm8921_chg_chip *chip)
 {
 	unsigned long charging_time;
-	ktime_t	current_time;
 	struct timespec ts;
 
-	current_time = alarm_get_elapsed_realtime();
-	ts = ktime_to_timespec(current_time);
+	get_monotonic_boottime(&ts);
 
 	if ((chip->is_chgtime_expired) &&
 		(chip->usb_present || chip->dc_present)) {
@@ -4778,7 +4782,7 @@ pr_err("update_heartbeat Called in parallel !!! : instances_count = %d", instanc
 			      round_jiffies_relative(msecs_to_jiffies
 						     (chip->update_time)));
 #else
-	chip->last_update_time = alarm_get_elapsed_realtime();
+	chip->last_update_time = ktime_get_boottime();
 	if (chip->initial_count > 0) {
 		chip->initial_count--;
 		if ((chip->cable_type != CABLE_TYPE_NONE &&
@@ -6010,7 +6014,7 @@ static int pm8921_charger_prepare(struct device *dev)
 
 	chip->is_in_sleep = true;
 
-	alarm_cancel(&chip->update_alarm);
+	hrtimer_cancel(&chip->update_hrtimer);
 	cancel_delayed_work_sync(&chip->update_heartbeat_work);
 
 	if (chip->recent_reported_soc <= chip->batt_pdata->poweroff_check_soc ||
@@ -6032,7 +6036,7 @@ static void pm8921_charger_complete(struct device *dev)
 
 	pr_debug("%s start\n", __func__);
 
-	alarm_cancel(&chip->update_alarm);
+	hrtimer_cancel(&chip->update_hrtimer);
 
 	wake_lock(&chip->monitor_wake_lock);
 	schedule_delayed_work(&chip->update_heartbeat_work, 0);
@@ -6264,9 +6268,11 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 	wake_lock_init(&chip->cable_wake_lock, WAKE_LOCK_SUSPEND,
 		       "sec-charger-cable");
 
-	alarm_init(&chip->event_termination_alarm,
-			ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP,
-			sec_bat_event_expired_timer_func);
+	hrtimer_init(&chip->event_termination_hrtimer,
+			CLOCK_BOOTTIME,
+			HRTIMER_MODE_ABS);
+	chip->event_termination_hrtimer.function =
+			&sec_bat_event_expired_timer_func;
 
 	if (pdata->get_board_rev) {
 		chip->hw_rev = pdata->get_board_rev();
@@ -6413,10 +6419,11 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 	pr_err("battery(PM8917) cable_type (%d)\n", chip->cable_type);
 
 	if (chip->update_time) {
-		chip->last_update_time = alarm_get_elapsed_realtime();
-		alarm_init(&chip->update_alarm,
-			ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP,
-			pm_update_alarm);
+		chip->last_update_time = ktime_get_boottime();
+		hrtimer_init(&chip->update_hrtimer,
+			CLOCK_BOOTTIME,
+			HRTIMER_MODE_ABS);
+		chip->update_hrtimer.function = &pm_update_alarm;
 
 		INIT_DELAYED_WORK(&chip->update_heartbeat_work,
 							update_heartbeat);
@@ -6446,7 +6453,7 @@ static int __devexit pm8921_charger_remove(struct platform_device *pdev)
 {
 	struct pm8921_chg_chip *chip = platform_get_drvdata(pdev);
 
-	alarm_cancel(&chip->event_termination_alarm);
+	hrtimer_cancel(&chip->event_termination_hrtimer);
 	power_supply_unregister(&chip->dc_psy);
 	power_supply_unregister(&chip->usb_psy);
 	power_supply_unregister(&chip->batt_psy);
