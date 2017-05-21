@@ -2535,7 +2535,11 @@ static int pm_batt_power_get_property(struct power_supply *psy,
 		/*val->intval = chip->charging_enabled;*/
 		switch (chip->cable_type) {
 		case CABLE_TYPE_NONE:
-			val->intval = 0;
+			if (chip->get_lpm_mode())
+				/* Userspace expects 0 for no-supply */
+				val->intval = 0;
+			else
+				val->intval = POWER_SUPPLY_TYPE_BATTERY;
 			break;
 		case CABLE_TYPE_USB:
 			val->intval = POWER_SUPPLY_TYPE_USB;
