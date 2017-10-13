@@ -26,8 +26,9 @@
 #include <asm/unaligned.h>
 #include <linux/firmware.h>
 #include <linux/string.h>
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/earlysuspend.h>
+#ifdef CONFIG_FB
+#include <linux/notifier.h>
+#include <linux/fb.h>
 #endif
 
 #if (CHECK_ANTITOUCH |CHECK_ANTITOUCH_SERRANO |CHECK_ANTITOUCH_GOLDEN)
@@ -3747,36 +3748,7 @@ out:
 	return ret;
 }
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#define mxt_suspend	NULL
-#define mxt_resume	NULL
-
-static void mxt_early_suspend(struct early_suspend *h)
-{
-	struct mxt_data *data = container_of(h, struct mxt_data,
-								early_suspend);
-#if TSP_INFORM_CHARGER
-	cancel_delayed_work_sync(&data->noti_dwork);
-#endif
-
-	mutex_lock(&data->input_dev->mutex);
-
-	mxt_stop(data);
-
-	mutex_unlock(&data->input_dev->mutex);
-}
-
-static void mxt_late_resume(struct early_suspend *h)
-{
-	struct mxt_data *data = container_of(h, struct mxt_data,
-								early_suspend);
-	mutex_lock(&data->input_dev->mutex);
-
-	mxt_start(data);
-
-	mutex_unlock(&data->input_dev->mutex);
-}
-#else
+#ifdef CONFIG_FB
 static int mxt_suspend(struct device *dev)
 {
 	struct i2c_client *client = to_i2c_client(dev);
@@ -3800,6 +3772,40 @@ static int mxt_resume(struct device *dev)
 	mxt_start(data);
 
 	mutex_unlock(&data->input_dev->mutex);
+	return 0;
+}
+
+static int fb_notifier_callback(struct notifier_block *self,
+				unsigned long event, void *data)
+{
+	struct fb_event *evdata = data;
+	int *blank;
+	int new_status;
+	struct mxt_data *mxt_ts_data = container_of(self, struct mxt_data, fb_notif);
+
+	if (evdata && evdata->data && data && mxt_ts_data->client) {
+		blank = evdata->data;
+		switch (*blank) {
+			case FB_BLANK_UNBLANK:
+			case FB_BLANK_NORMAL:
+			case FB_BLANK_VSYNC_SUSPEND:
+			case FB_BLANK_HSYNC_SUSPEND:
+				new_status = 0;
+				break;
+			default:
+			case FB_BLANK_POWERDOWN:
+				new_status = 1;
+				break;
+		}
+
+		if (event == FB_EVENT_BLANK) {
+			if (!new_status)
+				mxt_resume(&mxt_ts_data->client->dev);
+			else
+				mxt_suspend(&mxt_ts_data->client->dev);
+		}
+	}
+
 	return 0;
 }
 #endif
@@ -3921,11 +3927,9 @@ static int __devinit mxt_probe(struct i2c_client *client,
 		goto err_touch_init;
 	}
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	data->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
-	data->early_suspend.suspend = mxt_early_suspend;
-	data->early_suspend.resume = mxt_late_resume;
-	register_early_suspend(&data->early_suspend);
+#ifdef CONFIG_FB
+	data->fb_notif.notifier_call = fb_notifier_callback;
+	fb_register_client(&data->fb_notif);
 #endif
 
 #if CHECK_ANTITOUCH_SERRANO
@@ -3959,8 +3963,8 @@ static int __devexit mxt_remove(struct i2c_client *client)
 {
 	struct mxt_data *data = i2c_get_clientdata(client);
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	unregister_early_suspend(&data->early_suspend);
+#ifdef CONFIG_FB
+	fb_unregister_client(&data->fb_notif);
 #endif
 	free_irq(client->irq, data);
 	kfree(data->objects);
@@ -3980,10 +3984,15 @@ static struct i2c_device_id mxt_idtable[] = {
 
 MODULE_DEVICE_TABLE(i2c, mxt_idtable);
 
+#if (!defined(CONFIG_FB) && !defined(CONFIG_HAS_EARLYSUSPEND))
 static const struct dev_pm_ops mxt_pm_ops = {
 	.suspend = mxt_suspend,
 	.resume = mxt_resume,
 };
+#else
+static const struct dev_pm_ops mxt_pm_ops = {
+};
+#endif
 
 static struct i2c_driver mxt_i2c_driver = {
 	.id_table = mxt_idtable,

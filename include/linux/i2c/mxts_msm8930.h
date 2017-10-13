@@ -16,8 +16,9 @@
 #ifndef __MXT_H__
 #define __MXT_H__
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/earlysuspend.h>
+#ifdef CONFIG_FB
+#include <linux/notifier.h>
+#include <linux/fb.h>
 #endif
 #include <asm/system_info.h>
 
@@ -654,8 +655,8 @@ struct mxt_data {
 	u8		PalmFlag;
 	u8		PressEventCheck;
 #endif
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	struct early_suspend early_suspend;
+#ifdef CONFIG_FB
+	struct notifier_block fb_notif;
 #endif
 #ifdef TSP_BOOSTER
 	struct touch_booster booster;
