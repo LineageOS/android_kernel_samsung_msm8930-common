@@ -16,7 +16,6 @@
 //#define ISP_VERY_VERBOSE_DEBUG
 
 #include <linux/delay.h>
-#include <linux/earlysuspend.h>
 #include <linux/firmware.h>
 #include <linux/gpio.h>
 #include <linux/i2c.h>
@@ -33,6 +32,10 @@
 #include <linux/wakelock.h>
 #include <linux/workqueue.h>
 #include <linux/uaccess.h>
+#ifdef CONFIG_FB
+#include <linux/notifier.h>
+#include <linux/fb.h>
+#endif
 
 #if defined(CONFIG_MACH_SERRANO)
 #if defined(CONFIG_MACH_SERRANO_SPR) || defined(CONFIG_MACH_SERRANO_USC) \
@@ -137,7 +140,6 @@ struct tc360_data {
 	struct input_dev		*input_dev;
 	char				phys[32];
 	struct tc360_platform_data	*pdata;
-	struct early_suspend		early_suspend;
 	struct mutex			lock;
 	struct fw_image			*fw_img;
 	bool				enabled;
@@ -165,11 +167,14 @@ struct tc360_data {
 	struct fdata_struct		*fdata;
 #endif
 	atomic_t touchkey_enable;
+#ifdef CONFIG_FB
+	struct notifier_block fb_notif;
+#endif
 };
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static void tc360_early_suspend(struct early_suspend *h);
-static void tc360_late_resume(struct early_suspend *h);
+#ifdef CONFIG_FB
+static int fb_notifier_callback(struct notifier_block *self,
+                                unsigned long event, void *data);
 #endif
 
 static irqreturn_t tc360_interrupt(int irq, void *dev_id)
@@ -889,12 +894,6 @@ err:
 	}
 #endif
 
-/* early suspend is not removed for debugging. */
-/*
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	unregister_early_suspend(&data->early_suspend);
-#endif
-*/
 	data->fw_flash_state = STATE_FLASH_FAIL;
 	wake_lock_destroy(&data->fw_wake_lock);
 	free_irq(client->irq, data);
@@ -1830,11 +1829,9 @@ static int __devinit tc360_probe(struct i2c_client *client,
 		break;
 	}
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	data->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
-	data->early_suspend.suspend = tc360_early_suspend;
-	data->early_suspend.resume = tc360_late_resume;
-	register_early_suspend(&data->early_suspend);
+#ifdef CONFIG_FB
+	data->fb_notif.notifier_call = fb_notifier_callback;
+	fb_register_client(&data->fb_notif);
 #endif
 
 	data->led_wq = create_singlethread_workqueue(client->name);
@@ -1890,8 +1887,8 @@ static int __devexit tc360_remove(struct i2c_client *client)
 {
 	struct tc360_data *data = i2c_get_clientdata(client);
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	unregister_early_suspend(&data->early_suspend);
+#ifdef CONFIG_FB
+	fb_unregister_client(&data->fb_notif);
 #endif
 	free_irq(client->irq, data);
 	gpio_free(data->pdata->gpio_int);
@@ -1907,7 +1904,7 @@ static int __devexit tc360_remove(struct i2c_client *client)
 	return 0;
 }
 
-#if defined(CONFIG_PM) || defined(CONFIG_HAS_EARLYSUSPEND)
+#ifdef CONFIG_FB
 static int tc360_suspend(struct device *dev)
 {
 	struct i2c_client *client = to_i2c_client(dev);
@@ -1958,7 +1955,6 @@ static int tc360_suspend(struct device *dev)
 		gpio_tlmm_config(GPIO_CFG(102, 0,
 			GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), 1);
 	#endif
-		
 	} else if (data->suspend_type == TC360_SUSPEND_WITH_SLEEP_CMD) {
 		ret = i2c_smbus_write_byte_data(client, TC360_CMD,
 						TC360_CMD_SLEEP);
@@ -2006,7 +2002,6 @@ static int tc360_resume(struct device *dev)
 		gpio_tlmm_config(GPIO_CFG(102, 0,
 			GPIO_CFG_INPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA), 1);
 	#endif
-	
 		data->pdata->power(true);
 		msleep(TC360_POWERON_DELAY);
 	} else if (data->suspend_type == TC360_SUSPEND_WITH_SLEEP_CMD) {
@@ -2025,28 +2020,49 @@ out:
 	dev_info(&client->dev, "%s\n", __func__);
 	return 0;
 }
+
+static int fb_notifier_callback(struct notifier_block *self,
+				unsigned long event, void *data)
+{
+	struct fb_event *evdata = data;
+	int *blank;
+	int new_status;
+	struct tc360_data *tc360_tk_data = container_of(self, struct tc360_data, fb_notif);
+
+	if (evdata && evdata->data && data && tc360_tk_data->client) {
+		blank = evdata->data;
+		switch (*blank) {
+			case FB_BLANK_UNBLANK:
+			case FB_BLANK_NORMAL:
+			case FB_BLANK_VSYNC_SUSPEND:
+			case FB_BLANK_HSYNC_SUSPEND:
+				new_status = 0;
+				break;
+			default:
+			case FB_BLANK_POWERDOWN:
+				new_status = 1;
+				break;
+		}
+
+		if (event == FB_EVENT_BLANK) {
+			if (!new_status)
+				tc360_resume(&tc360_tk_data->client->dev);
+			else
+				tc360_suspend(&tc360_tk_data->client->dev);
+		}
+	}
+
+	return 0;
+}
 #endif
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static void tc360_early_suspend(struct early_suspend *h)
-{
-	struct tc360_data *data;
-	data = container_of(h, struct tc360_data, early_suspend);
-	tc360_suspend(&data->client->dev);
-}
-
-static void tc360_late_resume(struct early_suspend *h)
-{
-	struct tc360_data *data;
-	data = container_of(h, struct tc360_data, early_suspend);
-	tc360_resume(&data->client->dev);
-}
-#endif
-
-#if defined(CONFIG_PM) || defined(CONFIG_HAS_EARLYSUSPEND)
+#if (!defined(CONFIG_FB) && !defined(CONFIG_HAS_EARLYSUSPEND))
 static const struct dev_pm_ops tc360_pm_ops = {
 	.suspend	= tc360_suspend,
 	.resume		= tc360_resume,
+};
+#else
+static const struct dev_pm_ops tc360_pm_ops = {
 };
 #endif
 
