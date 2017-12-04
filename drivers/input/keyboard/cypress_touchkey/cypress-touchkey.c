@@ -20,7 +20,6 @@
 #include <linux/irq.h>
 #include <linux/platform_device.h>
 #include <linux/miscdevice.h>
-#include <linux/earlysuspend.h>
 #include <linux/i2c/cypress_touchkey_234.h>
 #include <linux/regulator/consumer.h>
 #include <asm/mach-types.h>
@@ -33,6 +32,11 @@
 #include <linux/mutex.h>
 #include <linux/workqueue.h>
 #include <linux/leds.h>
+#endif
+
+#ifdef CONFIG_FB
+#include <linux/notifier.h>
+#include <linux/fb.h>
 #endif
 
 /* use extra keys : recent key, home key */
@@ -79,7 +83,6 @@ struct cypress_touchkey_info {
 	struct i2c_client			*client;
 	struct cypress_touchkey_platform_data	*pdata;
 	struct input_dev			*input_dev;
-	struct early_suspend			early_suspend;
 	struct device	*dev;
 	char			phys[32];
 	unsigned char			keycode[NUM_OF_KEY];
@@ -103,11 +106,14 @@ struct cypress_touchkey_info {
 	struct work_struct			led_work;
 	atomic_t			touchkey_enable;
 #endif
+#ifdef CONFIG_FB
+struct notifier_block fb_notif;
+#endif
 };
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static void cypress_touchkey_early_suspend(struct early_suspend *h);
-static void cypress_touchkey_late_resume(struct early_suspend *h);
+#ifdef CONFIG_FB
+static int fb_notifier_callback(struct notifier_block *self, 
+                                unsigned long event, void *data);
 #endif
 
 static int touchkey_led_status;
@@ -1107,13 +1113,10 @@ static int __devinit cypress_touchkey_probe(struct i2c_client *client,
 	cypress_touchkey_auto_cal(info);
 #endif
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-		info->early_suspend.level =
-				EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
-		info->early_suspend.suspend = cypress_touchkey_early_suspend;
-		info->early_suspend.resume = cypress_touchkey_late_resume;
-		register_early_suspend(&info->early_suspend);
-#endif /* CONFIG_HAS_EARLYSUSPEND */
+#ifdef CONFIG_FB
+        info->fb_notif.notifier_call = fb_notifier_callback;
+        fb_register_client(&info->fb_notif);
+#endif /* CONFIG_FB */
 
 	info->dev = device_create(sec_class, NULL, 0, NULL, "sec_touchkey");
 
@@ -1180,6 +1183,9 @@ err_mem_alloc:
 static int __devexit cypress_touchkey_remove(struct i2c_client *client)
 {
 	struct cypress_touchkey_info *info = i2c_get_clientdata(client);
+#ifdef CONFIG_FB
+        fb_unregister_client(&info->fb_notif);
+#endif
 	if (info->irq >= 0)
 		free_irq(info->irq, info);
 	mutex_destroy(&info->touchkey_led_mutex);
@@ -1190,7 +1196,7 @@ static int __devexit cypress_touchkey_remove(struct i2c_client *client)
 	return 0;
 }
 
-#if defined(CONFIG_PM) || defined(CONFIG_HAS_EARLYSUSPEND)
+#ifdef CONFIG_FB
 static int cypress_touchkey_suspend(struct device *dev)
 {
 	struct i2c_client *client = to_i2c_client(dev);
@@ -1231,21 +1237,39 @@ static int cypress_touchkey_resume(struct device *dev)
 
 	return ret;
 }
-#endif
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static void cypress_touchkey_early_suspend(struct early_suspend *h)
+static int fb_notifier_callback(struct notifier_block *self,
+				unsigned long event, void *data)
 {
-	struct cypress_touchkey_info *info;
-	info = container_of(h, struct cypress_touchkey_info, early_suspend);
-	cypress_touchkey_suspend(&info->client->dev);
-}
+	struct fb_event *evdata = data;
+	int *blank;
+	int new_status;
+	struct cypress_touchkey_info *cypress_touchkey_tk_data = container_of(self, struct cypress_touchkey_info, fb_notif);
 
-static void cypress_touchkey_late_resume(struct early_suspend *h)
-{
-	struct cypress_touchkey_info *info;
-	info = container_of(h, struct cypress_touchkey_info, early_suspend);
-	cypress_touchkey_resume(&info->client->dev);
+	if (evdata && evdata->data && data && cypress_touchkey_tk_data->client) {
+		blank = evdata->data;
+		switch (*blank) {
+			case FB_BLANK_UNBLANK:
+			case FB_BLANK_NORMAL:
+			case FB_BLANK_VSYNC_SUSPEND:
+			case FB_BLANK_HSYNC_SUSPEND:
+				new_status = 0;
+				break;
+			default:
+			case FB_BLANK_POWERDOWN:
+				new_status = 1;
+				break;
+		}
+
+		if (event == FB_EVENT_BLANK) {
+			if (!new_status)
+				cypress_touchkey_resume(&cypress_touchkey_tk_data->client->dev);
+			else
+				cypress_touchkey_suspend(&cypress_touchkey_tk_data->client->dev);
+		}
+	}
+
+	return 0;
 }
 #endif
 
@@ -1255,10 +1279,13 @@ static const struct i2c_device_id cypress_touchkey_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, cypress_touchkey_id);
 
-#if defined(CONFIG_PM) && !defined(CONFIG_HAS_EARLYSUSPEND)
+#if (!defined(CONFIG_FB) && !defined(CONFIG_HAS_EARLYSUSPEND))
 static const struct dev_pm_ops cypress_touchkey_pm_ops = {
 	.suspend	= cypress_touchkey_suspend,
 	.resume		= cypress_touchkey_resume,
+};
+#else
+static const struct dev_pm_ops cypress_touchkey_pm_ops = {
 };
 #endif
 
