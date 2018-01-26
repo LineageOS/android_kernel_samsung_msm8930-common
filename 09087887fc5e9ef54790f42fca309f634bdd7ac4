@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "1b7dee11_ff80a51b",
+        "filename": "drivers/input/touchscreen/synaptics_i2c_rmi_msm8930.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 3703,
+      "author": {
+        "id": 444
+      },
+      "writtenOn": "2018-01-26T18:37:41Z",
+      "side": 1,
+      "message": "#ifdef CONFIG_HAS_EARLYSUSPEND\n\nThis should probably be converted to use FB notifiers though, like we did on serrano.",
+      "revId": "09087887fc5e9ef54790f42fca309f634bdd7ac4",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "ccd2e47b_021f0cac",
+        "filename": "drivers/video/msm/mipi_samsung_esd_refresh.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 280,
+      "author": {
+        "id": 444
+      },
+      "writtenOn": "2018-01-26T18:37:41Z",
+      "side": 1,
+      "message": "#ifdef CONFIG_HAS_EARLYSUSPEND",
+      "revId": "09087887fc5e9ef54790f42fca309f634bdd7ac4",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
