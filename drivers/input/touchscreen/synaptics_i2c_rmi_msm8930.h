@@ -25,9 +25,9 @@
 #include <linux/i2c/synaptics_rmi_msm8930.h>
 #endif
 
-
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/earlysuspend.h>
+#ifdef CONFIG_FB
+#include <linux/notifier.h>
+#include <linux/fb.h>
 #endif
 
 #ifdef CONFIG_LEDS_CLASS
@@ -291,8 +291,8 @@ struct synaptics_rmi4_data {
 	struct mutex rmi4_io_ctrl_mutex;
 	struct mutex rmi4_reflash_mutex;
 	struct timer_list f51_finger_timer;
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	struct early_suspend early_suspend;
+#ifdef CONFIG_FB
+	struct notifier_block fb_notif;
 #endif
 	unsigned char *firmware_image;
 

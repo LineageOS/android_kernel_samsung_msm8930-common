@@ -24,8 +24,9 @@
 #include <linux/gpio.h>
 #include <linux/leds.h>
 #include <linux/regulator/consumer.h>
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/earlysuspend.h>
+#ifdef CONFIG_FB
+#include <linux/notifier.h>
+#include <linux/fb.h>
 #endif
 #ifdef CONFIG_MACH_JF
 #include "synaptics_i2c_rmi.h"
@@ -154,21 +155,13 @@ static int synaptics_rmi4_i2c_write(struct synaptics_rmi4_data *rmi4_data,
 
 static int synaptics_rmi4_reinit_device(struct synaptics_rmi4_data *rmi4_data);
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static ssize_t synaptics_rmi4_full_pm_cycle_show(struct device *dev,
-		struct device_attribute *attr, char *buf);
-
-static ssize_t synaptics_rmi4_full_pm_cycle_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count);
-
-static void synaptics_rmi4_early_suspend(struct early_suspend *h);
-
-static void synaptics_rmi4_late_resume(struct early_suspend *h);
-#else
-
+#ifdef CONFIG_FB
 static int synaptics_rmi4_suspend(struct device *dev);
 
 static int synaptics_rmi4_resume(struct device *dev);
+
+static int fb_notifier_callback(struct notifier_block *self,
+		unsigned long event, void *rmi4_data);
 #endif
 
 #ifdef PROXIMITY
@@ -210,7 +203,8 @@ static ssize_t synaptics_rmi4_0dbutton_show(struct device *dev,
 
 static ssize_t synaptics_rmi4_0dbutton_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count);
-#ifdef CONFIG_LEDS_CLASSstatic int tkey_led_on;
+#ifdef CONFIG_LEDS_CLASS
+static int tkey_led_on;
 
 static void msm_tkey_led_set(struct led_classdev *led_cdev,
 	enum led_brightness value)
@@ -600,11 +594,6 @@ struct synaptics_rmi4_exp_fn {
 };
 
 static struct device_attribute attrs[] = {
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	__ATTR(full_pm_cycle, (S_IRUGO | S_IWUSR | S_IWGRP),
-			synaptics_rmi4_full_pm_cycle_show,
-			synaptics_rmi4_full_pm_cycle_store),
-#endif
 #ifdef PROXIMITY
 	__ATTR(proximity_enables, (S_IRUGO | S_IWUSR | S_IWGRP),
 			synaptics_rmi4_f51_enables_show,
@@ -637,31 +626,6 @@ static struct list_head exp_fn_list;
 
 #ifdef PROXIMITY
 static struct synaptics_rmi4_f51_handle *f51;
-#endif
-
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static ssize_t synaptics_rmi4_full_pm_cycle_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
-
-	return snprintf(buf, PAGE_SIZE, "%u\n",
-			rmi4_data->full_pm_cycle);
-}
-
-static ssize_t synaptics_rmi4_full_pm_cycle_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-	unsigned int input;
-	struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
-
-	if (sscanf(buf, "%u", &input) != 1)
-		return -EINVAL;
-
-	rmi4_data->full_pm_cycle = input > 0 ? 1 : 0;
-
-	return count;
-}
 #endif
 
 #ifdef TSP_BOOSTER
@@ -3699,18 +3663,6 @@ int synaptics_rmi4_new_function(enum exp_fn fn_type,
 	return 0;
 }
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static void synaptics_init_power_on(struct work_struct *work)
-{
-	struct synaptics_rmi4_data *rmi4_data =
-		container_of(work,
-			struct synaptics_rmi4_data, work_init_power_on.work);
-
-	synaptics_rmi4_late_resume(&rmi4_data->early_suspend);
-}
-#endif
-
-
  /**
  * synaptics_rmi4_probe()
  *
@@ -3875,11 +3827,9 @@ err_tsp_reboot:
 		}
 #endif
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	rmi4_data->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN - 1;
-	rmi4_data->early_suspend.suspend = synaptics_rmi4_early_suspend;
-	rmi4_data->early_suspend.resume = synaptics_rmi4_late_resume;
-	register_early_suspend(&rmi4_data->early_suspend);
+#ifdef CONFIG_FB
+	rmi4_data->fb_notif.notifier_call = fb_notifier_callback;
+	fb_register_client(&rmi4_data->fb_notif);
 #endif
 
     /* initialize hallsensor status */
@@ -3891,16 +3841,6 @@ err_tsp_reboot:
     rmi4_data->callbacks.inform_lcd = synaptics_lcd_cb;
 	if (rmi4_data->register_cb)
 		rmi4_data->register_cb(&rmi4_data->callbacks);
-
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	/* turn off TSP power. after LCD module on, TSP power will turn on */
-	synaptics_rmi4_early_suspend(&rmi4_data->early_suspend);
-
-	INIT_DELAYED_WORK(&rmi4_data->work_init_power_on,
-					synaptics_init_power_on);
-	schedule_delayed_work(&rmi4_data->work_init_power_on,
-					msecs_to_jiffies(6000));
-#endif
 
 	/* for blocking to be excuted open function until probing */
 	complete_all(&rmi4_data->init_done);
@@ -3971,8 +3911,8 @@ static int __devexit synaptics_rmi4_remove(struct i2c_client *client)
 	led_classdev_unregister(&rmi4_data->leds);
 #endif
 	rmi = &(rmi4_data->rmi4_mod_info);
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	unregister_early_suspend(&rmi4_data->early_suspend);
+#ifdef CONFIG_FB
+	fb_unregister_client(&rmi4_data->fb_notif);
 #endif
 
 	synaptics_rmi4_irq_enable(rmi4_data, false);
@@ -4162,115 +4102,7 @@ static void synaptics_rmi4_input_close(struct input_dev *dev)
 }
 #endif
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#define synaptics_rmi4_suspend NULL
-#define synaptics_rmi4_resume NULL
-
- /**
- * synaptics_rmi4_early_suspend()
- *
- * Called by the kernel during the early suspend phase when the system
- * enters suspend.
- *
- * This function calls synaptics_rmi4_sensor_sleep() to stop finger
- * data acquisition and put the sensor to sleep.
- */
-static void synaptics_rmi4_early_suspend(struct early_suspend *h)
-{
-	struct synaptics_rmi4_data *rmi4_data =
-			container_of(h, struct synaptics_rmi4_data,
-			early_suspend);
-
-	if (rmi4_data->stay_awake) {
-		rmi4_data->staying_awake = true;
-		return;
-	} else {
-		rmi4_data->staying_awake = false;
-	}
-#ifdef CONFIG_LEDS_CLASS
-    rmi4_data->board->tkey_led_vdd_on(0);
-#endif
-	if (!rmi4_data->touch_stopped) {
-		dev_info(&rmi4_data->i2c_client->dev, "%s\n", __func__);
-
-		disable_irq(rmi4_data->i2c_client->irq);
-		rmi4_data->board->power(false);
-		rmi4_data->touch_stopped = true;
-
-		/* release all finger when entered suspend */
-		synaptics_rmi4_release_all_finger(rmi4_data);
-		rmi4_data->board->i2c_set(false);
-	}
-}
-
- /**
- * synaptics_rmi4_late_resume()
- *
- * Called by the kernel during the late resume phase when the system
- * wakes up from suspend.
- *
- * This function goes through the sensor wake process if the system wakes
- * up from early suspend (without going into suspend).
- */
-static void synaptics_rmi4_late_resume(struct early_suspend *h)
-{
-	struct synaptics_rmi4_data *rmi4_data =
-			container_of(h, struct synaptics_rmi4_data,
-			early_suspend);
-	int retval;
-
-	if (rmi4_data->staying_awake)
-		return;
-
-	if (rmi4_data->touch_stopped) {
-	dev_info(&rmi4_data->i2c_client->dev, "%s\n", __func__);
-       /* turn on led */
-#ifdef CONFIG_LEDS_CLASS
-	if (!is_lcd_on && tkey_led_on)
-
-		rmi4_data->touchkey_lcd_on = false;
-
-	else
-
-		rmi4_data->touchkey_lcd_on = true;
-
-
-	if (rmi4_data->touchkey_lcd_on)
-
-		rmi4_data->board->tkey_led_vdd_on(tkey_led_on);
-
-	else
-
-		dev_info(&rmi4_data->i2c_client->dev,
-
-			"%s: led skip \n", __func__);
-#endif
-	rmi4_data->board->i2c_set(true);
-	rmi4_data->board->power(true);
-	rmi4_data->current_page = 0xff;
-	rmi4_data->touch_stopped = false;
-
-    msleep(SYNAPTICS_HW_RESET_TIME_B0);
-
-	retval = synaptics_rmi4_reinit_device(rmi4_data);
-	if (retval < 0) {
-		dev_err(&rmi4_data->i2c_client->dev,
-				"%s: Failed to reinit device\n",
-				__func__);
-	}
-
-	if (rmi4_data->ta_status)
-		synaptics_charger_conn(rmi4_data, rmi4_data->ta_status);
-
-    if (rmi4_data->hallsensor_status == 0)
-        synaptics_hallsensor_conn(rmi4_data, rmi4_data->hallsensor_status);
-
-	enable_irq(rmi4_data->i2c_client->irq);
-	}
-	return;
-}
-#else
-
+#ifdef CONFIG_FB
  /**
  * synaptics_rmi4_suspend()
  *
@@ -4352,12 +4184,49 @@ static int synaptics_rmi4_resume(struct device *dev)
 
 	return 0;
 }
+
+static int fb_notifier_callback(struct notifier_block *self,
+				unsigned long event, void *data)
+{
+	struct fb_event *evdata = data;
+	int *blank;
+	int new_status;
+	struct synaptics_rmi4_data *synaptics_rmi4_ts_data = container_of(self, struct synaptics_rmi4_data, fb_notif);
+
+	if (evdata && evdata->data && data && synaptics_rmi4_ts_data->i2c_client) {
+		blank = evdata->data;
+		switch (*blank) {
+			case FB_BLANK_UNBLANK:
+			case FB_BLANK_NORMAL:
+			case FB_BLANK_VSYNC_SUSPEND:
+			case FB_BLANK_HSYNC_SUSPEND:
+				new_status = 0;
+				break;
+			default:
+			case FB_BLANK_POWERDOWN:
+				new_status = 1;
+				break;
+		}
+
+		if (event == FB_EVENT_BLANK) {
+			if (!new_status)
+				synaptics_rmi4_resume(&synaptics_rmi4_ts_data->i2c_client->dev);
+			else
+				synaptics_rmi4_suspend(&synaptics_rmi4_ts_data->i2c_client->dev);
+		}
+	}
+
+	return 0;
+}
 #endif
-		
-#ifdef CONFIG_PM
+
+#if (!defined(CONFIG_FB) && !defined(CONFIG_HAS_EARLYSUSPEND))
 static const struct dev_pm_ops synaptics_rmi4_dev_pm_ops = {
 	.suspend = synaptics_rmi4_suspend,
 	.resume  = synaptics_rmi4_resume,
+};
+#else
+static const struct dev_pm_ops synaptics_rmi4_dev_pm_ops = {
 };
 #endif
 
