@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "6c739bff_3b57e073",
+        "filename": "/COMMIT_MSG",
+        "patchSetId": 1
+      },
+      "lineNbr": 7,
+      "author": {
+        "id": 10067
+      },
+      "writtenOn": "2018-06-15T17:19:56Z",
+      "side": 1,
+      "message": "hm?",
+      "range": {
+        "startLine": 7,
+        "startChar": 5,
+        "endLine": 7,
+        "endChar": 11
+      },
+      "revId": "bf27074ad1148fff8def850f3d9391587f6c3278",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "c33ea258_a4751102",
+        "filename": "drivers/mmc/card/block.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 2542,
+      "author": {
+        "id": 10067
+      },
+      "writtenOn": "2018-06-15T17:19:56Z",
+      "side": 1,
+      "message": "hmm?",
+      "range": {
+        "startLine": 2542,
+        "startChar": 4,
+        "endLine": 2542,
+        "endChar": 11
+      },
+      "revId": "bf27074ad1148fff8def850f3d9391587f6c3278",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
