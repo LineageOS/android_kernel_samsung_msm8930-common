@@ -356,8 +356,8 @@ again:
 		 * applies. If this is really a shmem page then the page lock
 		 * will prevent unexpected transitions.
 		 */
-		lock_page(page);
-		shmem_swizzled = PageSwapCache(page) || page->mapping;
+		lock_page(page_head);
+		shmem_swizzled = PageSwapCache(page_head) || page_head->mapping;
 		unlock_page(page_head);
 		put_page(page_head);
 
@@ -453,7 +453,7 @@ again:
 
 		key->both.offset |= FUT_OFF_INODE; /* inode-based key */
 		key->shared.inode = inode;
-		key->shared.pgoff = basepage_index(page);
+		key->shared.pgoff = page_head->index;
 		rcu_read_unlock();
 	}
 
