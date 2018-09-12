@@ -118,6 +118,13 @@ config ANDROID_LOW_MEMORY_KILLER_AUTODETECT_OOM_ADJ_VALUES
 	  /sys/module/lowmemorykiller/parameters/adj and convert them
 	  to oom_score_adj values.
 
+config ANDROID_FSTAB_FAKE
+	bool "Enable android fstab driver for fake DT fstab"
+	depends on PROC_FS
+	---help---
+	  This is intended to allow early mounting partitions
+	  on devices without DT, or where DT can't be modified.
+
 source "drivers/staging/android/switch/Kconfig"
 
 config ANDROID_INTF_ALARM_DEV
