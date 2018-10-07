@@ -1270,31 +1270,16 @@ static int fb_notifier_callback(struct notifier_block *self,
 {
 	struct fb_event *evdata = data;
 	int *blank;
-	int new_status;
-	struct cypress_touchkey_info *cypress_touchkey_tk_data = container_of(self, struct cypress_touchkey_info, fb_notif);
+	struct cypress_touchkey_info *cypress_touchkey_tk_data =
+		container_of(self, struct cypress_touchkey_info, fb_notif);
 
-	if (evdata && evdata->data && data && cypress_touchkey_tk_data->client) {
+	if (evdata && evdata->data && event == FB_EVENT_BLANK &&
+		cypress_touchkey_tk_data && cypress_touchkey_tk_data->client) {
 		blank = evdata->data;
-		switch (*blank) {
-			case FB_BLANK_UNBLANK:
-			case FB_BLANK_NORMAL:
-			case FB_BLANK_VSYNC_SUSPEND:
-			case FB_BLANK_HSYNC_SUSPEND:
-				new_status = 0;
-				break;
-			default:
-			case FB_BLANK_POWERDOWN:
-				new_status = 1;
-				break;
-		}
-
-		if (event == FB_EVENT_BLANK) {
-			if (!new_status) {
-				cypress_touchkey_resume(&cypress_touchkey_tk_data->client->dev);
-			} else {
-				cypress_touchkey_suspend(&cypress_touchkey_tk_data->client->dev);
-                        }
-		}
+		if (*blank == FB_BLANK_UNBLANK)
+			cypress_touchkey_resume(&cypress_touchkey_tk_data->client->dev);
+		else if (*blank == FB_BLANK_POWERDOWN)
+			cypress_touchkey_suspend(&cypress_touchkey_tk_data->client->dev);
 	}
 
 	return 0;
