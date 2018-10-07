@@ -24,10 +24,6 @@
 #include <linux/gpio.h>
 #include <linux/leds.h>
 #include <linux/regulator/consumer.h>
-#ifdef CONFIG_FB
-#include <linux/notifier.h>
-#include <linux/fb.h>
-#endif
 #ifdef CONFIG_MACH_JF
 #include "synaptics_i2c_rmi.h"
 #endif
@@ -4190,30 +4186,16 @@ static int fb_notifier_callback(struct notifier_block *self,
 {
 	struct fb_event *evdata = data;
 	int *blank;
-	int new_status;
-	struct synaptics_rmi4_data *synaptics_rmi4_ts_data = container_of(self, struct synaptics_rmi4_data, fb_notif);
+	struct synaptics_rmi4_data *synaptics_rmi4_ts_data =
+		container_of(self, struct synaptics_rmi4_data, fb_notif);
 
-	if (evdata && evdata->data && data && synaptics_rmi4_ts_data->i2c_client) {
+	if (evdata && evdata->data && event == FB_EVENT_BLANK &&
+		synaptics_rmi4_ts_data && synaptics_rmi4_ts_data->i2c_client) {
 		blank = evdata->data;
-		switch (*blank) {
-			case FB_BLANK_UNBLANK:
-			case FB_BLANK_NORMAL:
-			case FB_BLANK_VSYNC_SUSPEND:
-			case FB_BLANK_HSYNC_SUSPEND:
-				new_status = 0;
-				break;
-			default:
-			case FB_BLANK_POWERDOWN:
-				new_status = 1;
-				break;
-		}
-
-		if (event == FB_EVENT_BLANK) {
-			if (!new_status)
-				synaptics_rmi4_resume(&synaptics_rmi4_ts_data->i2c_client->dev);
-			else
-				synaptics_rmi4_suspend(&synaptics_rmi4_ts_data->i2c_client->dev);
-		}
+		if (*blank == FB_BLANK_UNBLANK)
+			synaptics_rmi4_resume(&synaptics_rmi4_ts_data->i2c_client->dev);
+		else if (*blank == FB_BLANK_POWERDOWN)
+			synaptics_rmi4_suspend(&synaptics_rmi4_ts_data->i2c_client->dev);
 	}
 
 	return 0;

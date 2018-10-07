@@ -26,10 +26,6 @@
 #include <asm/unaligned.h>
 #include <linux/firmware.h>
 #include <linux/string.h>
-#ifdef CONFIG_FB
-#include <linux/notifier.h>
-#include <linux/fb.h>
-#endif
 
 #if (CHECK_ANTITOUCH |CHECK_ANTITOUCH_SERRANO |CHECK_ANTITOUCH_GOLDEN)
 #define MXT_T61_TIMER_ONESHOT			0
@@ -3780,30 +3776,16 @@ static int fb_notifier_callback(struct notifier_block *self,
 {
 	struct fb_event *evdata = data;
 	int *blank;
-	int new_status;
-	struct mxt_data *mxt_ts_data = container_of(self, struct mxt_data, fb_notif);
+	struct mxt_data *mxt_ts_data =
+		container_of(self, struct mxt_data, fb_notif);
 
-	if (evdata && evdata->data && data && mxt_ts_data->client) {
+	if (evdata && evdata->data && event == FB_EVENT_BLANK &&
+		mxt_ts_data && mxt_ts_data->client) {
 		blank = evdata->data;
-		switch (*blank) {
-			case FB_BLANK_UNBLANK:
-			case FB_BLANK_NORMAL:
-			case FB_BLANK_VSYNC_SUSPEND:
-			case FB_BLANK_HSYNC_SUSPEND:
-				new_status = 0;
-				break;
-			default:
-			case FB_BLANK_POWERDOWN:
-				new_status = 1;
-				break;
-		}
-
-		if (event == FB_EVENT_BLANK) {
-			if (!new_status)
-				mxt_resume(&mxt_ts_data->client->dev);
-			else
-				mxt_suspend(&mxt_ts_data->client->dev);
-		}
+		if (*blank == FB_BLANK_UNBLANK)
+			mxt_resume(&mxt_ts_data->client->dev);
+		else if (*blank == FB_BLANK_POWERDOWN)
+			mxt_suspend(&mxt_ts_data->client->dev);
 	}
 
 	return 0;
