@@ -193,7 +193,7 @@ void cypress_power_onoff(int onoff)
 #endif
 
 #ifdef CONFIG_KEYBOARD_TC360_TOUCHKEY
-static int touchkey_keycodes[] = {KEY_MENU, KEY_BACK};
+static int touchkey_keycodes[] = {KEY_RECENT, KEY_BACK};
 
 static struct tc360_platform_data tc360_pdata = {
 	.gpio_scl = GPIO_TOUCHKEY_I2C_SCL,
@@ -217,7 +217,7 @@ static struct i2c_board_info touchkey_i2c_devices_info[] __initdata = {
 };
 #endif
 #ifdef CONFIG_KEYBOARD_CYPRESS_TOUCH
-static const u8 tkey_keycodes[] = {KEY_MENU, KEY_BACK};
+static const u8 tkey_keycodes[] = {KEY_RECENT, KEY_BACK};
 
 static struct cypress_touchkey_platform_data cypress_touchkey_pdata = {
 	.gpio_int = GPIO_TKEY_INT,
