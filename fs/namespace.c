@@ -850,6 +850,7 @@ put_again:
 		acct_auto_close_mnt(&mnt->mnt);
 		goto put_again;
 	}
+
 	list_del(&mnt->mnt_instance);
 	br_write_unlock(&vfsmount_lock);
 	mntfree(mnt);
@@ -1711,7 +1712,7 @@ static int do_remount(struct path *path, int flags, int mnt_flags,
 	struct super_block *sb = path->mnt->mnt_sb;
 	struct mount *mnt = real_mount(path->mnt);
 
-	if (!ns_capable(real_mount(path->mnt)->mnt_ns->user_ns, CAP_SYS_ADMIN))
+	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
 	if (!check_mnt(mnt))
@@ -1764,7 +1765,7 @@ static int do_move_mount(struct path *path, const char *old_name)
 	struct mount *p;
 	struct mount *old;
 	int err = 0;
-	if (!capable(CAP_SYS_ADMIN))
+	if (!ns_capable(real_mount(path->mnt)->mnt_ns->user_ns, CAP_SYS_ADMIN))
 		return -EPERM;
 	if (!old_name || !*old_name)
 		return -EINVAL;
