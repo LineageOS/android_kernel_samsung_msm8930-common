@@ -178,7 +178,7 @@
 		bgt	18f
 
 
-		.macro	forward_copy_shift pull push
+		.macro	forward_copy_shift lspull lspush
 
 		subs	r2, r2, #28
 		blt	14f
@@ -201,24 +201,24 @@
 	PLD(	pld	[r1, #320]		)
 12:	PLD(	pld	[r1, #384]		)
 13:		ldr4w	r1, r4, r5, r6, r7, abort=19f
-		mov	r3, lr, pull #\pull
+		mov	r3, lr, lspull #\lspull
 		subs	r2, r2, #32
 		ldr4w	r1, r8, r9, ip, lr, abort=19f
-		orr	r3, r3, r4, push #\push
-		mov	r4, r4, pull #\pull
-		orr	r4, r4, r5, push #\push
-		mov	r5, r5, pull #\pull
-		orr	r5, r5, r6, push #\push
-		mov	r6, r6, pull #\pull
-		orr	r6, r6, r7, push #\push
-		mov	r7, r7, pull #\pull
-		orr	r7, r7, r8, push #\push
-		mov	r8, r8, pull #\pull
-		orr	r8, r8, r9, push #\push
-		mov	r9, r9, pull #\pull
-		orr	r9, r9, ip, push #\push
-		mov	ip, ip, pull #\pull
-		orr	ip, ip, lr, push #\push
+		orr	r3, r3, r4, lspush #\lspush
+		mov	r4, r4, lspull #\lspull
+		orr	r4, r4, r5, lspush #\lspush
+		mov	r5, r5, lspull #\lspull
+		orr	r5, r5, r6, lspush #\lspush
+		mov	r6, r6, lspull #\lspull
+		orr	r6, r6, r7, lspush #\lspush
+		mov	r7, r7, lspull #\lspull
+		orr	r7, r7, r8, lspush #\lspush
+		mov	r8, r8, lspull #\lspull
+		orr	r8, r8, r9, lspush #\lspush
+		mov	r9, r9, lspull #\lspull
+		orr	r9, r9, ip, lspush #\lspush
+		mov	ip, ip, lspull #\lspull
+		orr	ip, ip, lr, lspush #\lspush
 		str8w	r0, r3, r4, r5, r6, r7, r8, r9, ip, , abort=19f
 		bge	12b
 	PLD(	cmn	r2, #320		)
@@ -229,26 +229,26 @@
 14:		ands	ip, r2, #28
 		beq	16f
 
-15:		mov	r3, lr, pull #\pull
+15:		mov	r3, lr, lspull #\lspull
 		ldr1w	r1, lr, abort=21f
 		subs	ip, ip, #4
-		orr	r3, r3, lr, push #\push
+		orr	r3, r3, lr, lspush #\lspush
 		str1w	r0, r3, abort=21f
 		bgt	15b
 	CALGN(	cmp	r2, #0			)
 	CALGN(	bge	11b			)
 
-16:		sub	r1, r1, #(\push / 8)
+16:		sub	r1, r1, #(\lspush / 8)
 		b	8b
 
 		.endm
 
 
-		forward_copy_shift	pull=8	push=24
+		forward_copy_shift	lspull=8	lspush=24
 
-17:		forward_copy_shift	pull=16	push=16
+17:		forward_copy_shift	lspull=16	lspush=16
 
-18:		forward_copy_shift	pull=24	push=8
+18:		forward_copy_shift	lspull=24	lspush=8
 
 
 /*
