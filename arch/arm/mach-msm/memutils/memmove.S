@@ -128,7 +128,7 @@ ENTRY(memmove)
 		blt	18f
 
 
-		.macro	backward_copy_shift push pull
+		.macro	backward_copy_shift lspush lspull
 
 		subs	r2, r2, #28
 		blt	14f
@@ -150,24 +150,24 @@ ENTRY(memmove)
 	PLD(	pld	[r1, #-324]		)
 12:	PLD(	pld	[r1, #-388]		)
 13:		ldmdb   r1!, {r7, r8, r9, ip}
-		mov     lr, r3, push #\push
+		mov     lr, r3, lspush #\lspush
 		subs    r2, r2, #32
 		ldmdb   r1!, {r3, r4, r5, r6}
-		orr     lr, lr, ip, pull #\pull
-		mov     ip, ip, push #\push
-		orr     ip, ip, r9, pull #\pull
-		mov     r9, r9, push #\push
-		orr     r9, r9, r8, pull #\pull
-		mov     r8, r8, push #\push
-		orr     r8, r8, r7, pull #\pull
-		mov     r7, r7, push #\push
-		orr     r7, r7, r6, pull #\pull
-		mov     r6, r6, push #\push
-		orr     r6, r6, r5, pull #\pull
-		mov     r5, r5, push #\push
-		orr     r5, r5, r4, pull #\pull
-		mov     r4, r4, push #\push
-		orr     r4, r4, r3, pull #\pull
+		orr     lr, lr, ip, lspull #\lspull
+		mov     ip, ip, lspush #\lspush
+		orr     ip, ip, r9, lspull #\lspull
+		mov     r9, r9, lspush #\lspush
+		orr     r9, r9, r8, lspull #\lspull
+		mov     r8, r8, lspush #\lspush
+		orr     r8, r8, r7, lspull #\lspull
+		mov     r7, r7, lspush #\lspush
+		orr     r7, r7, r6, lspull #\lspull
+		mov     r6, r6, lspush #\lspush
+		orr     r6, r6, r5, lspull #\lspull
+		mov     r5, r5, lspush #\lspush
+		orr     r5, r5, r4, lspull #\lspull
+		mov     r4, r4, lspush #\lspush
+		orr     r4, r4, r3, lspull #\lspull
 		stmdb   r0!, {r4 - r9, ip, lr}
 		bge	12b
 	PLD(	cmn	r2, #320		)
@@ -178,25 +178,25 @@ ENTRY(memmove)
 14:		ands	ip, r2, #28
 		beq	16f
 
-15:		mov     lr, r3, push #\push
+15:		mov     lr, r3, lspush #\lspush
 		ldr	r3, [r1, #-4]!
 		subs	ip, ip, #4
-		orr	lr, lr, r3, pull #\pull
+		orr	lr, lr, r3, lspull #\lspull
 		str	lr, [r0, #-4]!
 		bgt	15b
 	CALGN(	cmp	r2, #0			)
 	CALGN(	bge	11b			)
 
-16:		add	r1, r1, #(\pull / 8)
+16:		add	r1, r1, #(\lspull / 8)
 		b	8b
 
 		.endm
 
 
-		backward_copy_shift	push=8	pull=24
+		backward_copy_shift	lspush=8	lspull=24
 
-17:		backward_copy_shift	push=16	pull=16
+17:		backward_copy_shift	lspush=16	lspull=16
 
-18:		backward_copy_shift	push=24	pull=8
+18:		backward_copy_shift	lspush=24	lspull=8
 
 ENDPROC(memmove)
