@@ -3467,20 +3467,6 @@ int mdp4_overlay_mdp_perf_req(struct msm_fb_data_type *mfd,
 		}
 	}
 
-#if defined(CONFIG_MACH_SERRANO)
-	if(cnt <= 3 && ((src_h_total  < 350 ) && (yuvcount == 0))) {
-
-
-		pr_debug(" Append Extra BW S-Cover Issue\n");
-
-		ab_quota_port0 += (minimum_ab>>2);
-		ib_quota_port0 += (minimum_ib>>2);
-
-		ab_quota_port1 += (minimum_ab>>2);
-		ib_quota_port1 += (minimum_ib>>2);
-
-	}
-#endif
 	perf_req->mdp_ab_bw = roundup(ab_quota_total, MDP_BUS_SCALE_AB_STEP);
 	perf_req->mdp_ib_bw = roundup(ib_quota_total, MDP_BUS_SCALE_AB_STEP);
 
@@ -3492,21 +3478,7 @@ int mdp4_overlay_mdp_perf_req(struct msm_fb_data_type *mfd,
 		roundup(ab_quota_port1, MDP_BUS_SCALE_AB_STEP);
 	perf_req->mdp_ib_port1_bw =
 		roundup(ib_quota_total, MDP_BUS_SCALE_AB_STEP);
-#if defined(CONFIG_MACH_SERRANO) || defined(CONFIG_MACH_M2)
-if(cnt > 3) {
-	perf_req->mdp_ab_port0_bw = perf_req->mdp_ab_port0_bw*11;
-	perf_req->mdp_ab_port0_bw = perf_req->mdp_ab_port0_bw>>3;
 
-	perf_req->mdp_ib_port0_bw = perf_req->mdp_ib_port0_bw*11;
-	perf_req->mdp_ib_port0_bw = perf_req->mdp_ib_port0_bw>>3;
-
-	perf_req->mdp_ab_port1_bw = perf_req->mdp_ab_port1_bw*11;
-	perf_req->mdp_ab_port1_bw = perf_req->mdp_ab_port1_bw>>3;
-
-	perf_req->mdp_ib_port1_bw = perf_req->mdp_ib_port1_bw*11;
-	perf_req->mdp_ib_port1_bw = perf_req->mdp_ib_port1_bw>>3;
-}
-#endif
 	pr_debug("%s %d: ab_quota_total=(%llu, %llu) ib_quota_total=(%llu, %llu)\n",
 		 __func__, __LINE__,
 		 ab_quota_total, perf_req->mdp_ab_bw,
