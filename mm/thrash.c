@@ -31,7 +31,7 @@ static DEFINE_SPINLOCK(swap_token_lock);
 struct mm_struct *swap_token_mm;
 static struct mem_cgroup *swap_token_memcg;
 
-#ifdef CONFIG_CGROUP_MEM_RES_CTLR
+#ifdef CONFIG_MEMCG
 static struct mem_cgroup *swap_token_memcg_from_mm(struct mm_struct *mm)
 {
 	struct mem_cgroup *memcg;
