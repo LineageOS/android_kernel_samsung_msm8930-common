@@ -151,11 +151,19 @@ static int synaptics_rmi4_i2c_write(struct synaptics_rmi4_data *rmi4_data,
 
 static int synaptics_rmi4_reinit_device(struct synaptics_rmi4_data *rmi4_data);
 
-#ifdef CONFIG_FB
+#ifdef CONFIG_PM
+static ssize_t synaptics_rmi4_full_pm_cycle_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+
+static ssize_t synaptics_rmi4_full_pm_cycle_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count);
+
 static int synaptics_rmi4_suspend(struct device *dev);
 
 static int synaptics_rmi4_resume(struct device *dev);
+#endif
 
+#ifdef CONFIG_FB
 static int fb_notifier_callback(struct notifier_block *self,
 		unsigned long event, void *rmi4_data);
 #endif
@@ -590,6 +598,11 @@ struct synaptics_rmi4_exp_fn {
 };
 
 static struct device_attribute attrs[] = {
+#ifdef CONFIG_PM
+	__ATTR(full_pm_cycle, (S_IRUGO | S_IWUSR | S_IWGRP),
+			synaptics_rmi4_full_pm_cycle_show,
+			synaptics_rmi4_full_pm_cycle_store),
+#endif
 #ifdef PROXIMITY
 	__ATTR(proximity_enables, (S_IRUGO | S_IWUSR | S_IWGRP),
 			synaptics_rmi4_f51_enables_show,
@@ -622,6 +635,31 @@ static struct list_head exp_fn_list;
 
 #ifdef PROXIMITY
 static struct synaptics_rmi4_f51_handle *f51;
+#endif
+
+#ifdef CONFIG_PM
+static ssize_t synaptics_rmi4_full_pm_cycle_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+			rmi4_data->full_pm_cycle);
+}
+
+static ssize_t synaptics_rmi4_full_pm_cycle_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	unsigned int input;
+	struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
+
+	if (sscanf(buf, "%u", &input) != 1)
+		return -EINVAL;
+
+	rmi4_data->full_pm_cycle = input > 0 ? 1 : 0;
+
+	return count;
+}
 #endif
 
 #ifdef TSP_BOOSTER
@@ -4098,7 +4136,7 @@ static void synaptics_rmi4_input_close(struct input_dev *dev)
 }
 #endif
 
-#ifdef CONFIG_FB
+#ifdef CONFIG_PM
  /**
  * synaptics_rmi4_suspend()
  *
@@ -4180,7 +4218,9 @@ static int synaptics_rmi4_resume(struct device *dev)
 
 	return 0;
 }
+#endif
 
+#ifdef CONFIG_FB
 static int fb_notifier_callback(struct notifier_block *self,
 				unsigned long event, void *data)
 {

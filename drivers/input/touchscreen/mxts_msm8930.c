@@ -3744,7 +3744,7 @@ out:
 	return ret;
 }
 
-#ifdef CONFIG_FB
+#ifdef CONFIG_PM
 static int mxt_suspend(struct device *dev)
 {
 	struct i2c_client *client = to_i2c_client(dev);
@@ -3770,7 +3770,9 @@ static int mxt_resume(struct device *dev)
 	mutex_unlock(&data->input_dev->mutex);
 	return 0;
 }
+#endif
 
+#ifdef CONFIG_FB
 static int fb_notifier_callback(struct notifier_block *self,
 				unsigned long event, void *data)
 {

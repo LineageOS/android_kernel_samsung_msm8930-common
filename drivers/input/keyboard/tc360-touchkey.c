@@ -1904,7 +1904,7 @@ static int __devexit tc360_remove(struct i2c_client *client)
 	return 0;
 }
 
-#ifdef CONFIG_FB
+#ifdef CONFIG_PM
 static int tc360_suspend(struct device *dev)
 {
 	struct i2c_client *client = to_i2c_client(dev);
@@ -2020,7 +2020,9 @@ out:
 	dev_info(&client->dev, "%s\n", __func__);
 	return 0;
 }
+#endif
 
+#ifdef CONFIG_FB
 static int fb_notifier_callback(struct notifier_block *self,
 				unsigned long event, void *data)
 {

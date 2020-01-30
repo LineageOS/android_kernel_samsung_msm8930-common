@@ -109,7 +109,7 @@ struct cypress_touchkey_info {
 	atomic_t			touchkey_enable;
 #endif
 #ifdef CONFIG_FB
-struct notifier_block fb_notif;
+	struct notifier_block fb_notif;
 #endif
 };
 
@@ -1200,7 +1200,7 @@ static int __devexit cypress_touchkey_remove(struct i2c_client *client)
 	return 0;
 }
 
-#ifdef CONFIG_FB
+#ifdef CONFIG_PM
 static int cypress_touchkey_suspend(struct device *dev)
 {
 	struct i2c_client *client = to_i2c_client(dev);
@@ -1264,7 +1264,9 @@ out:
 	mutex_unlock(&info->lock);
 	return ret;
 }
+#endif
 
+#ifdef CONFIG_FB
 static int fb_notifier_callback(struct notifier_block *self,
 				unsigned long event, void *data)
 {
