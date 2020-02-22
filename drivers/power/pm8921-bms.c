@@ -1229,6 +1229,7 @@ static int calculate_fcc_uah(struct pm8921_bms_chip *chip, int batt_temp,
 							int chargecycles)
 {
 	int initfcc, result, scalefactor = 0;
+	batt_temp = 0;
 
 	if (chip->adjusted_fcc_temp_lut == NULL) {
 		initfcc = interpolate_fcc(chip->fcc_temp_lut, batt_temp);
@@ -1265,7 +1266,7 @@ static int get_battery_uvolts(struct pm8921_bms_chip *chip, int *uvolts)
 
 static int adc_based_ocv(struct pm8921_bms_chip *chip, int *ocv)
 {
-	int vbatt, rbatt, ibatt_ua, rc;
+	int vbatt = 0, rbatt, ibatt_ua, rc;
 
 	rc = get_battery_uvolts(chip, &vbatt);
 	if (rc) {
@@ -2504,7 +2505,7 @@ static int calculate_state_of_charge(struct pm8921_bms_chip *chip,
 
 static int recalculate_soc(struct pm8921_bms_chip *chip)
 {
-	int batt_temp;
+	int batt_temp = 0;
 	struct pm8921_soc_params raw;
 	int soc;
 
