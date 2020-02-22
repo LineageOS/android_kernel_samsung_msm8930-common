@@ -41,7 +41,9 @@
 #include "mpu6500_lp.h"
 #endif
 
+#ifdef CONFIG_INPUT_MPU6500_SELFTEST
 #include "./mpu6500_selftest.h"
+#endif
 
 #define DEBUG 0
 #define MPU6500_MODE_NORMAL	0
@@ -1412,6 +1414,7 @@ done:
 	return err;
 }
 
+#ifdef CONFIG_INPUT_MPU6500_SELFTEST
 static int gyro_do_calibrate(void)
 {
 	struct file *cal_filp;
@@ -1449,7 +1452,7 @@ done:
 	set_fs(old_fs);
 	return err;
 }
-
+#endif
 
 static ssize_t mpu6500_input_gyro_enable_show(struct device *dev,
 					      struct device_attribute *attr,
@@ -1569,6 +1572,7 @@ static ssize_t mpu6500_input_motion_recg_enable_store(struct device *dev,
 	return count;
 }
 
+#ifdef CONFIG_INPUT_MPU6500_SELFTEST
 static int gyro_do_calibrate(void);
 
 static ssize_t mpu6500_input_gyro_self_test_show(struct device *dev,
@@ -1619,6 +1623,7 @@ static ssize_t mpu6500_input_gyro_self_test_show(struct device *dev,
 		       scaled_gyro_rms[2] / 1000,
 		       (int)abs(scaled_gyro_rms[2]) % 1000);
 }
+#endif
 
 #ifdef CONFIG_INPUT_MPU6500_LP
 static ssize_t
@@ -1660,8 +1665,6 @@ static DEVICE_ATTR(lpso_enable, 0664,
 		   mpu6500_input_lp_scr_orient_enable_store);
 #endif
 
-
-
 static DEVICE_ATTR(acc_enable, 0664,
 		   mpu6500_input_accel_enable_show,
 		   mpu6500_input_accel_enable_store);
@@ -1674,19 +1677,21 @@ static DEVICE_ATTR(gyro_enable, 0664,
 static DEVICE_ATTR(gyro_delay, 0664,
 		   mpu6500_input_gyro_delay_show,
 		   mpu6500_input_gyro_delay_store);
+#ifdef CONFIG_INPUT_MPU6500_SELFTEST
 static DEVICE_ATTR(self_test, 0444, mpu6500_input_gyro_self_test_show, NULL);
+#endif
 static DEVICE_ATTR(mot_recg_enable, 0664,
 		   mpu6500_input_motion_recg_enable_show,
 		   mpu6500_input_motion_recg_enable_store);
-
-
 
 static struct attribute *mpu6500_attributes[] = {
 	&dev_attr_acc_enable.attr,
 	&dev_attr_acc_delay.attr,
 	&dev_attr_gyro_enable.attr,
 	&dev_attr_gyro_delay.attr,
+#ifdef CONFIG_INPUT_MPU6500_SELFTEST
 	&dev_attr_self_test.attr,
+#endif
 	&dev_attr_mot_recg_enable.attr,
 #ifdef CONFIG_INPUT_MPU6500_LP
 	&dev_attr_lpso_enable.attr,
@@ -1984,6 +1989,7 @@ static struct device_attribute dev_attr_temperature =
 	__ATTR(temperature, S_IRUSR | S_IRGRP, mpu6500_get_temp,
 		NULL);
 
+#ifdef CONFIG_INPUT_MPU6500_SELFTEST
 static ssize_t mpu6500_input_gyro_selftest_show(struct device *dev,
 						 struct device_attribute *attr,
 						 char *buf)
@@ -2058,6 +2064,7 @@ static struct device_attribute dev_attr_selftest =
 	__ATTR(selftest, S_IRUSR | S_IRGRP,
 		mpu6500_input_gyro_selftest_show,
 		NULL);
+#endif
 
 static ssize_t acc_data_read(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -2156,7 +2163,9 @@ static struct device_attribute *gyro_sensor_attrs[] = {
 	&dev_attr_temperature,
 	&dev_attr_gyro_sensor_vendor,
 	&dev_attr_gyro_sensor_name,
+#ifdef CONFIG_INPUT_MPU6500_SELFTEST
 	&dev_attr_selftest,
+#endif
 	NULL,
 };
 

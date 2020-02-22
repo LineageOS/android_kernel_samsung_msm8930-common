@@ -36,7 +36,9 @@
 #include <linux/wakelock.h>
 #include <linux/sensors_core.h>
 #include <linux/mpu6050_input.h>
+#ifdef CONFIG_INPUT_MPU6050_SELFTEST
 #include "mpu6050_selftest.h"
+#endif
 
 #define LOG_RESULT_LOCATION(x) \
 	pr_err("%s:%s:%d result=%d\n", __FILE__, __func__, __LINE__, x) \
@@ -1041,6 +1043,7 @@ done:
 	return err;
 }
 
+#ifdef CONFIG_INPUT_MPU6050_SELFTEST
 static int gyro_do_calibrate(void)
 {
 	struct file *cal_filp;
@@ -1077,6 +1080,7 @@ done:
 	set_fs(old_fs);
 	return err;
 }
+#endif
 
 static ssize_t mpu6050_input_gyro_enable_show(struct device *dev,
 					struct device_attribute *attr,
@@ -1162,6 +1166,7 @@ static ssize_t mpu6050_input_gyro_delay_store(struct device *dev,
 	return count;
 }
 
+#ifdef CONFIG_INPUT_MPU6050_SELFTEST
 static ssize_t mpu6050_input_gyro_self_test_show(struct device *dev,
 					struct device_attribute *attr,
 						char *buf)
@@ -1210,8 +1215,7 @@ static ssize_t mpu6050_input_gyro_self_test_show(struct device *dev,
 		scaled_gyro_rms[2]/1000,
 		(int)abs(scaled_gyro_rms[2])%1000);
 }
-
-
+#endif
 
 static DEVICE_ATTR(acc_enable, S_IRUGO | S_IWUSR | S_IWGRP,
 		mpu6050_input_accel_enable_show,
@@ -1225,17 +1229,19 @@ static DEVICE_ATTR(gyro_enable, S_IRUGO | S_IWUSR | S_IWGRP,
 static DEVICE_ATTR(gyro_delay, S_IRUGO | S_IWUSR | S_IWGRP,
 		mpu6050_input_gyro_delay_show,
 			mpu6050_input_gyro_delay_store);
+#ifdef CONFIG_INPUT_MPU6050_SELFTEST
 static DEVICE_ATTR(self_test, S_IRUGO | S_IWUSR | S_IWGRP,
 		mpu6050_input_gyro_self_test_show, NULL);
-
-
+#endif
 
 static struct attribute *mpu6050_attributes[] = {
 	&dev_attr_acc_enable.attr,
 	&dev_attr_acc_delay.attr,
 	&dev_attr_gyro_enable.attr,
 	&dev_attr_gyro_delay.attr,
+#ifdef CONFIG_INPUT_MPU6050_SELFTEST
 	&dev_attr_self_test.attr,
+#endif
 	NULL,
 };
 
@@ -1253,6 +1259,7 @@ static ssize_t mpu6050_input_reactive_enable_show(struct device *dev,
 		atomic_read(&gb_mpu_data->reactive_state));
 }
 
+#ifdef CONFIG_INPUT_MPU6050_SELFTEST
 static ssize_t mpu6050_input_gyro_selftest_show(struct device *dev,
 					struct device_attribute *attr,
 						char *buf)
@@ -1316,6 +1323,7 @@ static struct device_attribute dev_attr_selftest =
 	__ATTR(selftest, S_IRUSR | S_IRGRP,
 		mpu6050_input_gyro_selftest_show,
 		NULL);
+#endif
 
 static ssize_t mpu6050_input_reactive_enable_store(struct device *dev,
 					struct device_attribute
@@ -1540,7 +1548,9 @@ static struct device_attribute *gyro_sensor_attrs[] = {
 	&dev_attr_temperature,
 	&dev_attr_gyro_sensor_vendor,
 	&dev_attr_gyro_sensor_name,
+#ifdef CONFIG_INPUT_MPU6050_SELFTEST
 	&dev_attr_selftest,
+#endif
 	NULL,
 };
 
