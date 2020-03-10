@@ -3350,12 +3350,37 @@ static struct platform_device msm_tsens_device = {
 	.id = -1,
 };
 
+static struct msm_thermal_data_actions msm_thermal_pdata_actions[] = {
+	{
+		.threshold = 60,
+		.threshold_clr = 55,
+		.max_freq = 1728000,
+	},
+	{
+		.threshold = 70,
+		.threshold_clr = 65,
+		.max_freq = 1134000,
+	},
+	{
+		.threshold = 75,
+		.threshold_clr = 70,
+		.max_freq = 810000,
+	},
+	{
+		.threshold = 80,
+		.threshold_clr = 75,
+		.max_freq = 384000,
+	},
+};
+
 static struct msm_thermal_data msm_thermal_pdata = {
 	.sensor_id = 9,
 	.poll_ms = 250,
 	.limit_temp_degC = 70,
 	.temp_hysteresis_degC = 10,
 	.freq_step = 2,
+	.num_actions = ARRAY_SIZE(msm_thermal_pdata_actions),
+	.actions = msm_thermal_pdata_actions,
 };
 
 #ifdef CONFIG_MSM_FAKE_BATTERY
