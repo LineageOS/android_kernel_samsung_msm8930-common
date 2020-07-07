@@ -37,13 +37,12 @@
 #include <linux/switch.h>
 #include <linux/input.h>
 #include <linux/timer.h>
-#include <linux/wakelock.h>
 #include <linux/slab.h>
 #include <linux/gpio.h>
 #include "msm_fb.h"
 #include "mipi_dsi.h"
 
-#define WAKE_LOCK_TIME		(10 * HZ)	/* 1 sec */
+#define WAKEUP_SOURCE_TIME	10000	/* 1 sec */
 #define ESD_EXCEPT_CNT 0
 #define LP11_RECOVERY 0
 
@@ -52,7 +51,7 @@ extern struct class *sec_class;
 
 struct esd_data_t {
 	struct sec_esd_platform_data *pdata;
-	struct wake_lock det_wake_lock;
+	struct wakeup_source det_ws;
 	struct work_struct  det_work;
 	int esd_count;
 	struct delayed_work  esd_enable_delay;

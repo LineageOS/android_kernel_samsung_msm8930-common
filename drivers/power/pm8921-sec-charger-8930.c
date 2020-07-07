@@ -33,7 +33,7 @@
 #include <linux/debugfs.h>
 #include <linux/slab.h>
 #include <linux/ratelimit.h>
-#include <linux/pm.h>
+#include <linux/wakelock.h>
 
 #include <mach/msm_xo.h>
 #include <mach/msm_hsusb.h>
