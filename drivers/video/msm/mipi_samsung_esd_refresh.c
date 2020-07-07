@@ -73,7 +73,7 @@ static void lcd_esd_seq(struct esd_data_t *p_esd_data)
 	if (!mdp_fb_is_power_off(mfd)) {
 #ifndef ESD_DEBUG
 		/* threaded irq can sleep */
-		wake_lock_timeout(&p_esd_data->det_wake_lock, WAKE_LOCK_TIME);
+		__pm_wakeup_event(&p_esd_data->det_ws, WAKEUP_SOURCE_TIME);
 #endif
 		pr_info("lcd_esd_seq + \n");
 		p_esd_data->refresh_ongoing = true;
@@ -360,8 +360,7 @@ static int __devinit mipi_esd_refresh_probe(struct platform_device *pdev)
 	p_esd_data->esd_irq_enable = true;
 	p_esd_data->esd_processed_count = 0;
 
-	wake_lock_init(&p_esd_data->det_wake_lock,
-		 WAKE_LOCK_SUSPEND, "esd_det");
+	wakeup_source_init(&p_esd_data->det_ws, "esd_det");
 
 	INIT_WORK(&p_esd_data->det_work, sec_esd_work_func);
 	INIT_DELAYED_WORK(&p_esd_data->esd_enable_delay,\
@@ -394,7 +393,7 @@ static int __devinit mipi_esd_refresh_probe(struct platform_device *pdev)
 	return 0;
 
 err_request_detect_irq:
-	wake_lock_destroy(&p_esd_data->det_wake_lock);
+	wakeup_source_trash(&p_esd_data->det_ws);
 	kfree(p_esd_data);
 	esd_enable = NULL;
 	dev_set_drvdata(&pdev->dev, NULL);
@@ -408,7 +407,7 @@ static int sec_esd_remove(struct platform_device *pdev)
 	struct esd_data_t *p_esd_data = dev_get_drvdata(&pdev->dev);
 	free_irq(p_esd_data->pdata->esd_gpio_irq, p_esd_data);
 	disable_irq_wake(p_esd_data->pdata->esd_gpio_irq);
-	wake_lock_destroy(&p_esd_data->det_wake_lock);
+	wakeup_source_trash(&p_esd_data->det_ws);
 	kfree(p_esd_data);
 	return 0;
 }
