@@ -2035,9 +2035,9 @@ static int fb_notifier_callback(struct notifier_block *self,
 		tc360_tk_data && tc360_tk_data->client) {
 		blank = evdata->data;
 		if (*blank == FB_BLANK_UNBLANK)
-			tc360_resume(&tc360_tk_data->client->dev);
+			tc360_resume(&tc360_tk_data->input_dev->dev);
 		else if (*blank == FB_BLANK_POWERDOWN)
-			tc360_suspend(&tc360_tk_data->client->dev);
+			tc360_suspend(&tc360_tk_data->input_dev->dev);
 	}
 
 	return 0;

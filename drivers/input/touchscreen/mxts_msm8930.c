@@ -3778,16 +3778,16 @@ static int fb_notifier_callback(struct notifier_block *self,
 {
 	struct fb_event *evdata = data;
 	int *blank;
-	struct mxt_data *mxt_ts_data =
+	struct mxt_data *mxt_data =
 		container_of(self, struct mxt_data, fb_notif);
 
 	if (evdata && evdata->data && event == FB_EVENT_BLANK &&
-		mxt_ts_data && mxt_ts_data->client) {
+		mxt_data && mxt_data->client) {
 		blank = evdata->data;
 		if (*blank == FB_BLANK_UNBLANK)
-			mxt_resume(&mxt_ts_data->client->dev);
+			mxt_resume(&mxt_data->input_dev->dev);
 		else if (*blank == FB_BLANK_POWERDOWN)
-			mxt_suspend(&mxt_ts_data->client->dev);
+			mxt_suspend(&mxt_data->input_dev->dev);
 	}
 
 	return 0;
