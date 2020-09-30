@@ -2737,7 +2737,6 @@ static struct android_usb_platform_data android_usb_pdata = {
 #else
 	.cdrom = false,
 #endif
-	.nluns = 0,
 };
 
 static struct platform_device android_usb_device = {
