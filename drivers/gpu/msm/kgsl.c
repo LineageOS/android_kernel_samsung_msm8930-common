@@ -376,6 +376,7 @@ kgsl_mem_entry_attach_process(struct kgsl_mem_entry *entry,
 		ret = idr_get_new_above(&process->mem_idr, NULL, 1,
 					&entry->id);
 		spin_unlock(&process->mem_lock);
+
 		if (ret == 0)
 			break;
 		else if (ret != -EAGAIN)
