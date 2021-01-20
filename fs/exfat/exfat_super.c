@@ -284,43 +284,6 @@ static inline unsigned long exfat_hash(loff_t i_pos);
 static int exfat_write_inode(struct inode *inode, struct writeback_control *wbc);
 static void exfat_write_super(struct super_block *sb);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
-
-#define GLOBAL_ROOT_UID (0)
-#define GLOBAL_ROOT_GID (0)
-
-static inline bool uid_eq(uid_t left, uid_t right)
-{
-	return left == right;
-}
-
-static inline bool gid_eq(gid_t left, gid_t right)
-{
-	return left == right;
-}
-
-static inline uid_t from_kuid_munged(struct user_namespace *to, uid_t kuid)
-{
-	return kuid;
-}
-
-static inline gid_t from_kgid_munged(struct user_namespace *to, gid_t kgid)
-{
-	return kgid;
-}
-
-static inline uid_t make_kuid(struct user_namespace *from, uid_t uid)
-{
-	return uid;
-}
-
-static inline gid_t make_kgid(struct user_namespace *from, gid_t gid)
-{
-	return gid;
-}
-
-#endif
-
 static void __lock_super(struct super_block *sb)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0)
@@ -395,44 +358,20 @@ static int __exfat_revalidate(struct dentry *dentry)
 	return ret;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,00)
 static int exfat_revalidate(struct dentry *dentry, unsigned int flags)
-#else
-static int exfat_revalidate(struct dentry *dentry, struct nameidata *nd)
-#endif
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,00)
 	if (flags & LOOKUP_RCU)
 		return -ECHILD;
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,00)
-	if (nd && nd->flags & LOOKUP_RCU)
-		return -ECHILD;
-#endif
 
 	if (dentry->d_inode)
 		return 1;
 	return __exfat_revalidate(dentry);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,00)
 static int exfat_revalidate_ci(struct dentry *dentry, unsigned int flags)
-#else
-static int exfat_revalidate_ci(struct dentry *dentry, struct nameidata *nd)
-#endif
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,00)
 	if (flags & LOOKUP_RCU)
 		return -ECHILD;
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,00)
-	unsigned int flags;
-
-	if (nd && nd->flags & LOOKUP_RCU)
-		return -ECHILD;
-
-	flags = nd ? nd->flags : 0;
-#else
-	flags = nd ? nd->flags : 0;
-#endif
 
 	if (dentry->d_inode)
 		return 1;
@@ -820,16 +759,8 @@ const struct file_operations exfat_dir_operations = {
 	.fsync      = exfat_file_fsync,
 };
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,00)
 static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 						bool excl)
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,00)
-static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
-						struct nameidata *nd)
-#else
-static int exfat_create(struct inode *dir, struct dentry *dentry, int mode,
-						struct nameidata *nd)
-#endif
 {
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode;
@@ -907,13 +838,8 @@ static int exfat_d_anon_disconn(struct dentry *dentry)
 	return IS_ROOT(dentry) && (dentry->d_flags & DCACHE_DISCONNECTED);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,00)
 static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 						   unsigned int flags)
-#else
-static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
-						   struct nameidata *nd)
-#endif
 {
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode;
@@ -2204,9 +2130,7 @@ static int exfat_remount(struct super_block *sb, int *flags, char *data)
 	char *orig_data = kstrdup(data, GFP_KERNEL);
 	*flags |= MS_NODIRATIME;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,16,00)
 	sync_filesystem(sb);
-#endif
 
 	exfat_msg(sb, KERN_INFO, "re-mounted. Opts: %s", orig_data);
 	kfree(orig_data);

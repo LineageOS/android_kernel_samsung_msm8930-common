@@ -272,22 +272,11 @@ static inline void inode_unlock(struct inode *inode)
 #endif
 
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
 static inline int sdfat_remount_syncfs(struct super_block *sb)
 {
 	sync_filesystem(sb);
 	return 0;
 }
-#else /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 16, 0) */
-static inline int sdfat_remount_syncfs(struct super_block *sb)
-{
-	/*
-	 * We don`t need to call sync_filesystem(sb),
-	 * Because VFS calls it.
-	 */
-	return 0;
-}
-#endif
 
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
@@ -757,19 +746,11 @@ static struct inode *sdfat_iget(struct super_block *sb, loff_t i_pos)
 #endif
 
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0)
 static struct dentry *sdfat_lookup(struct inode *dir, struct dentry *dentry,
 						   unsigned int flags)
 {
 	return __sdfat_lookup(dir, dentry);
 }
-#else /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 6, 0) */
-static struct dentry *sdfat_lookup(struct inode *dir, struct dentry *dentry,
-						   unsigned int flags)
-{
-	return __sdfat_lookup(dir, dentry);
-}
-#endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 4, 0)
 static struct dentry *__d_make_root(struct inode *root_inode)
@@ -1065,27 +1046,11 @@ static void *sdfat_follow_link(struct dentry *dentry, struct nameidata *nd)
 }
 #endif
 
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0)
 static int sdfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 			 bool excl)
 {
 	return __sdfat_create(dir, dentry);
 }
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(3, 4, 0)
-static int sdfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
-			bool excl)
-{
-	return __sdfat_create(dir, dentry);
-}
-#else
-static int sdfat_create(struct inode *dir, struct dentry *dentry, int mode,
-			struct nameidata *nd)
-{
-	return __sdfat_create(dir, dentry);
-}
-#endif
-
 
 /*************************************************************************
  * WRAP FUNCTIONS FOR DEBUGGING
@@ -2469,11 +2434,7 @@ static struct dentry *__sdfat_lookup(struct inode *dir, struct dentry *dentry)
 		 * In such case, we reuse an alias instead of new dentry
 		 */
 		if (d_unhashed(alias)) {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
-			BUG_ON(alias->d_name.hash != dentry->d_name.hash && alias->d_name.len != dentry->d_name.len);
-#else
 			BUG_ON(alias->d_name.hash_len != dentry->d_name.hash_len);
-#endif
 			sdfat_msg(sb, KERN_INFO, "rehashed a dentry(%p) "
 				"in read lookup", alias);
 			d_drop(dentry);
