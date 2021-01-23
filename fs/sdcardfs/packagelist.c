@@ -64,8 +64,7 @@ static inline void qstr_init(struct qstr *q, const char *name)
 static inline int qstr_copy(const struct qstr *src, struct qstr *dest)
 {
 	dest->name = kstrdup(src->name, GFP_KERNEL);
-	dest->len = src->len;
-	dest->hash = src->hash;
+	dest->hash_len = src->hash_len;
 	return !!dest->name;
 }
 
