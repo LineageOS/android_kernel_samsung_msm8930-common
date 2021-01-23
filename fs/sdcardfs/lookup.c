@@ -109,7 +109,7 @@ struct inode *sdcardfs_iget(struct super_block *sb, struct inode *lower_inode, u
 		iput(lower_inode);
 		return ERR_PTR(-ENOMEM);
 	}
-	/* if found a cached inode, then just return it */
+	/* if found a cached inode, then just return it (after iput) */
 	if (!(inode->i_state & I_NEW)) {
 		iput(lower_inode);
 		return inode;
@@ -234,7 +234,7 @@ static struct dentry *__sdcardfs_lookup(struct dentry *dentry,
 	struct dentry *lower_dir_dentry = NULL;
 	struct dentry *lower_dentry;
 	const struct qstr *name;
-	struct nameidata lower_nd;
+	struct path lower_path;
 	struct qstr dname;
 	struct dentry *ret_dentry = NULL;
 	struct sdcardfs_sb_info *sbi;
@@ -254,7 +254,7 @@ static struct dentry *__sdcardfs_lookup(struct dentry *dentry,
 
 	/* Use vfs_path_lookup to check if the dentry exists or not */
 	err = vfs_path_lookup(lower_dir_dentry, lower_dir_mnt, name->name, 0,
-				&lower_nd.path);
+				&lower_path);
 	/* check for other cases */
 	if (err == -ENOENT) {
 		struct dentry *child;
@@ -275,7 +275,7 @@ static struct dentry *__sdcardfs_lookup(struct dentry *dentry,
 			err = vfs_path_lookup(lower_dir_dentry,
 						lower_dir_mnt,
 						match->d_name.name, 0,
-						&lower_nd.path);
+						&lower_path);
 			dput(match);
 		}
 	}
@@ -295,7 +295,7 @@ static struct dentry *__sdcardfs_lookup(struct dentry *dentry,
 			 * if an error returned, there's no change in the lower_path
 			 * returns: -ERRNO if error (0: no error)
 			 */
-			err = setup_obb_dentry(dentry, &lower_nd.path);
+			err = setup_obb_dentry(dentry, &lower_path);
 
 			if (err) {
 				/* if the sbi->obbpath is not available, we can optionally
@@ -310,9 +310,9 @@ static struct dentry *__sdcardfs_lookup(struct dentry *dentry,
 			}
 		}
 
-		sdcardfs_set_lower_path(dentry, &lower_nd.path);
+		sdcardfs_set_lower_path(dentry, &lower_path);
 		ret_dentry =
-			__sdcardfs_interpose(dentry, dentry->d_sb, &lower_nd.path, id);
+			__sdcardfs_interpose(dentry, dentry->d_sb, &lower_path, id);
 		if (IS_ERR(ret_dentry)) {
 			err = PTR_ERR(ret_dentry);
 			 /* path_put underlying path on error */
@@ -340,16 +340,16 @@ static struct dentry *__sdcardfs_lookup(struct dentry *dentry,
 		return lower_dentry;
 	if (!lower_dentry) {
 		/* We called vfs_path_lookup earlier, and did not get a negative
-		 * dentry then. Don't confuse the lower filesystem by forcing one
-		 * on it now...
+		 * dentry then. Don't confuse the lower filesystem by forcing
+		 * one on it now...
 		 */
 		err = -ENOENT;
 		goto out;
 	}
 
-	lower_nd.path.dentry = lower_dentry;
-	lower_nd.path.mnt = mntget(lower_dir_mnt);
-	sdcardfs_set_lower_path(dentry, &lower_nd.path);
+	lower_path.dentry = lower_dentry;
+	lower_path.mnt = mntget(lower_dir_mnt);
+	sdcardfs_set_lower_path(dentry, &lower_path);
 
 	/*
 	 * If the intent is to create a file, then don't return an error, so

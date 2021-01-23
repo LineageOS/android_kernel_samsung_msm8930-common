@@ -332,10 +332,10 @@ static int sdcardfs_read_super(struct vfsmount *mnt, struct super_block *sb,
 		goto out_sput;
 	}
 	sb->s_root = d_make_root(inode);
- 	if (!sb->s_root) {
- 		err = -ENOMEM;
+	if (!sb->s_root) {
+		err = -ENOMEM;
 		goto out_sput;
- 	}
+	}
 	d_set_d_op(sb->s_root, &sdcardfs_ci_dops);
 
 	/* link the upper and lower dentries */

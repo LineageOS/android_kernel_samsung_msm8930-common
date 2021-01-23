@@ -86,10 +86,6 @@ static int sdcardfs_create(struct inode *dir, struct dentry *dentry,
 	lower_dentry_mnt = lower_path.mnt;
 	lower_parent_dentry = lock_parent(lower_dentry);
 
-	err = mnt_want_write(lower_path.mnt);
-	if (err)
-		goto out_unlock;
-
 	/* set last 16bytes of mode field to 0664 */
 	mode = (mode & S_IFMT) | 00664;
 
@@ -118,7 +114,6 @@ static int sdcardfs_create(struct inode *dir, struct dentry *dentry,
 	fixup_lower_ownership(dentry, dentry->d_name.name);
 
 out:
-	mnt_drop_write(lower_path.mnt);
 	task_lock(current);
 	current->fs = saved_fs;
 	task_unlock(current);
@@ -157,9 +152,6 @@ static int sdcardfs_unlink(struct inode *dir, struct dentry *dentry)
 	lower_mnt = lower_path.mnt;
 	lower_dir_dentry = lock_parent(lower_dentry);
 
-	err = mnt_want_write(lower_path.mnt);
-	if (err)
-		goto out_unlock;
 	err = vfs_unlink2(lower_mnt, lower_dir_inode, lower_dentry);
 
 	/*
@@ -180,8 +172,6 @@ static int sdcardfs_unlink(struct inode *dir, struct dentry *dentry)
 	dentry->d_inode->i_ctime = dir->i_ctime;
 	d_drop(dentry); /* this is needed, else LTP fails (VFS won't do it) */
 out:
-	mnt_drop_write(lower_path.mnt);
-out_unlock:
 	unlock_dir(lower_dir_dentry);
 	sdcardfs_put_lower_path(dentry, &lower_path);
 	revert_fsids(saved_cred);
@@ -250,10 +240,6 @@ static int sdcardfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode
 	lower_dentry = lower_path.dentry;
 	lower_mnt = lower_path.mnt;
 	lower_parent_dentry = lock_parent(lower_dentry);
-
-	err = mnt_want_write(lower_path.mnt);
-	if (err)
-		goto out_unlock;
 
 	/* set last 16bytes of mode field to 0775 */
 	mode = (mode & S_IFMT) | 00775;
@@ -338,7 +324,6 @@ static int sdcardfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode
 		}
 	}
 out:
-	mnt_drop_write(lower_path.mnt);
 	task_lock(current);
 	current->fs = saved_fs;
 	task_unlock(current);
@@ -381,9 +366,6 @@ static int sdcardfs_rmdir(struct inode *dir, struct dentry *dentry)
 	lower_mnt = lower_path.mnt;
 	lower_dir_dentry = lock_parent(lower_dentry);
 
-	err = mnt_want_write(lower_path.mnt);
-	if (err)
-		goto out_unlock;
 	err = vfs_rmdir2(lower_mnt, lower_dir_dentry->d_inode, lower_dentry);
 	if (err)
 		goto out;
@@ -396,8 +378,6 @@ static int sdcardfs_rmdir(struct inode *dir, struct dentry *dentry)
 	set_nlink(dir, lower_dir_dentry->d_inode->i_nlink);
 
 out:
-	mnt_drop_write(lower_path.mnt);
-out_unlock:
 	unlock_dir(lower_dir_dentry);
 	sdcardfs_put_real_lower(dentry, &lower_path);
 	revert_fsids(saved_cred);
@@ -454,18 +434,11 @@ static int sdcardfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		goto out;
 	}
 
-	err = mnt_want_write(lower_old_path.mnt);
-	if (err)
-		goto out;
-	err = mnt_want_write(lower_new_path.mnt);
-	if (err)
-		goto out_drop_old_write;
-
 	err = vfs_rename2(lower_mnt,
 			 lower_old_dir_dentry->d_inode, lower_old_dentry,
 			 lower_new_dir_dentry->d_inode, lower_new_dentry);
 	if (err)
-		goto out_err;
+		goto out;
 
 	/* Copy attrs from lower dir, but i_uid/i_gid */
 	sdcardfs_copy_and_fix_attrs(new_dir, lower_new_dir_dentry->d_inode);
@@ -479,11 +452,6 @@ static int sdcardfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	fixup_tmp_permissions(old_dentry->d_inode);
 	fixup_lower_ownership(old_dentry, new_dentry->d_name.name);
 	d_invalidate(old_dentry); /* Can't fixup ownership recursively :( */
-
-out_err:
-	mnt_drop_write(lower_new_path.mnt);
-out_drop_old_write:
-	mnt_drop_write(lower_old_path.mnt);
 out:
 	unlock_rename(lower_old_dir_dentry, lower_new_dir_dentry);
 	dput(lower_old_dir_dentry);
@@ -613,8 +581,8 @@ static int sdcardfs_permission(struct vfsmount *mnt, struct inode *inode, int ma
 	 * locks must be dealt with to avoid undefined behavior.
 	 */
 	copy_attrs(&tmp, inode);
-	tmp.i_uid = top->d_uid;
-	tmp.i_gid = get_gid(mnt, inode->i_sb, top);
+	tmp.i_uid = make_kuid(&init_user_ns, top->d_uid);
+	tmp.i_gid = make_kgid(&init_user_ns, get_gid(mnt, inode->i_sb, top));
 	tmp.i_mode = (inode->i_mode & S_IFMT)
 			| get_mode(mnt, SDCARDFS_I(inode), top);
 	data_put(top);
@@ -664,8 +632,8 @@ static int sdcardfs_setattr(struct vfsmount *mnt, struct dentry *dentry, struct 
 	 *
 	 */
 	copy_attrs(&tmp, inode);
-	tmp.i_uid = top->d_uid;
-	tmp.i_gid = get_gid(mnt, dentry->d_sb, top);
+	tmp.i_uid = make_kuid(&init_user_ns, top->d_uid);
+	tmp.i_gid = make_kgid(&init_user_ns, get_gid(mnt, dentry->d_sb, top));
 	tmp.i_mode = (inode->i_mode & S_IFMT)
 			| get_mode(mnt, SDCARDFS_I(inode), top);
 	tmp.i_size = i_size_read(inode);
@@ -778,8 +746,8 @@ static int sdcardfs_fillattr(struct vfsmount *mnt, struct inode *inode,
 	stat->ino = inode->i_ino;
 	stat->mode = (inode->i_mode  & S_IFMT) | get_mode(mnt, info, top);
 	stat->nlink = inode->i_nlink;
-	stat->uid = top->d_uid;
-	stat->gid = get_gid(mnt, sb, top);
+	stat->uid = make_kuid(&init_user_ns, top->d_uid);
+	stat->gid = make_kgid(&init_user_ns, get_gid(mnt, sb, top));
 	stat->rdev = inode->i_rdev;
 	stat->size = lower_stat->size;
 	stat->atime = lower_stat->atime;
