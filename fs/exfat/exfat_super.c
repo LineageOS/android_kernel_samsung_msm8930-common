@@ -115,6 +115,31 @@ static char exfat_default_iocharset[] = DEFAULT_IOCHARSET;
 
 extern struct timezone sys_tz;
 
+#define EXFAT_DSTATE_LOCKED	(void *)(0xCAFE2016)
+#define EXFAT_DSTATE_UNLOCKED	(void *)(0x0)
+static inline void __lock_d_revalidate(struct dentry *dentry)
+{
+	spin_lock(&dentry->d_lock);
+	dentry->d_fsdata = EXFAT_DSTATE_LOCKED;
+	spin_unlock(&dentry->d_lock);
+}
+
+static inline void __unlock_d_revalidate(struct dentry *dentry)
+{
+	spin_lock(&dentry->d_lock);
+	dentry->d_fsdata = EXFAT_DSTATE_UNLOCKED;
+	spin_unlock(&dentry->d_lock);
+}
+
+/* __check_dstate_locked requires dentry->d_lock */
+static inline int __check_dstate_locked(struct dentry *dentry)
+{
+	if (dentry->d_fsdata == EXFAT_DSTATE_LOCKED)
+		return 1;
+
+	return 0;
+}
+
 #define CHECK_ERR(x)	BUG_ON(x)
 #define ELAPSED_TIME        0
 
@@ -323,7 +348,14 @@ static void exfat_mnt_msg(struct super_block *sb, int mount, int prev_err, const
 
 static int __exfat_revalidate(struct dentry *dentry)
 {
-	return 0;
+	int ret = 1;
+	spin_lock(&dentry->d_lock);
+	if ((dentry->d_time != dentry->d_parent->d_inode->i_version) &&
+		!__check_dstate_locked(dentry)) {
+		ret = 0;
+	}
+	spin_unlock(&dentry->d_lock);
+	return ret;
 }
 
 static int exfat_revalidate(struct dentry *dentry, unsigned int flags)
@@ -344,6 +376,7 @@ static int exfat_revalidate_ci(struct dentry *dentry, unsigned int flags)
 	if (dentry->d_inode)
 		return 1;
 
+#if 0
 	if (!flags)
 		return 0;
 
@@ -355,6 +388,7 @@ static int exfat_revalidate_ci(struct dentry *dentry, unsigned int flags)
 		if (nd->flags & (LOOKUP_CREATE | LOOKUP_RENAME_TARGET))
 			return 0;
 	}
+#endif
 #endif
 
 	return __exfat_revalidate(dentry);
@@ -755,6 +789,9 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 			err = -EIO;
 		goto out;
 	}
+
+	__lock_d_revalidate(dentry);
+
 	dir->i_version++;
 	dir->i_ctime = dir->i_mtime = dir->i_atime = ts;
 	if (IS_DIRSYNC(dir))
@@ -772,10 +809,10 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	inode->i_version++;
 	inode->i_mtime = inode->i_atime = inode->i_ctime = ts;
 
-	dentry->d_time = dentry->d_parent->d_inode->i_version;
 	d_instantiate(dentry, inode);
 
 out:
+	__unlock_d_revalidate(dentry);
 	__unlock_super(sb);
 	PRINTK("exfat_create exited\n");
 	return err;
@@ -843,7 +880,20 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 	}
 
 	alias = d_find_alias(inode);
-	if (alias && !exfat_d_anon_disconn(alias)) {
+
+	/*
+	 * Checking "alias->d_parent == dentry->d_parent" to make sure
+	 * FS is not corrupted (especially double linked dir).
+	 */
+	if (alias && alias->d_parent == dentry->d_parent &&
+	    !exfat_d_anon_disconn(alias)) {
+		/*
+		 * This inode has non anonymous-DCACHE_DISCONNECTED
+		 * dentry. This means, the user did ->lookup() by an
+		 * another name (longname vs 8.3 alias of it) in past.
+		 *
+		 * Switch to new one for reason of locality if possible.
+		 */
 		CHECK_ERR(d_unhashed(alias));
 		if (!S_ISDIR(i_mode))
 			d_move(alias, dentry);
@@ -855,23 +905,14 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 		dput(alias);
 	}
 out:
+	dentry->d_time = dir->i_version;
 	__unlock_super(sb);
-	dentry->d_time = dentry->d_parent->d_inode->i_version;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)
 	dentry->d_op = sb->s_root->d_op;
-	dentry = d_splice_alias(inode, dentry);
-	if (dentry) {
-		dentry->d_op = sb->s_root->d_op;
-		dentry->d_time = dentry->d_parent->d_inode->i_version;
-	}
-#else
-	dentry = d_splice_alias(inode, dentry);
-	if (dentry)
-		dentry->d_time = dentry->d_parent->d_inode->i_version;
 #endif
+	dentry = d_splice_alias(inode, dentry);
 	PRINTK("exfat_lookup exited 2\n");
 	return dentry;
-
 error:
 	__unlock_super(sb);
 	PRINTK("exfat_lookup exited 3\n");
@@ -893,6 +934,11 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 
 	EXFAT_I(inode)->fid.size = i_size_read(inode);
 
+	if (EXFAT_I(inode)->fid.dir.dir == DIR_DELETED) {
+		err = -ENOENT;
+		goto out;
+	}
+
 	err = FsRemoveEntry(dir, &(EXFAT_I(inode)->fid));
 	if (err) {
 		if (err == FFS_PERMISSIONERR)
@@ -901,6 +947,9 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 			err = -EIO;
 		goto out;
 	}
+
+	__lock_d_revalidate(dentry);
+
 	dir->i_version++;
 	dir->i_mtime = dir->i_atime = ts;
 	if (IS_DIRSYNC(dir))
@@ -911,8 +960,10 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 	clear_nlink(inode);
 	inode->i_mtime = inode->i_atime = ts;
 	exfat_detach(inode);
+	dentry->d_time = dir->i_version;
 
 out:
+	__unlock_d_revalidate(dentry);
 	__unlock_super(sb);
 	PRINTK("exfat_unlink exited\n");
 	return err;
@@ -960,6 +1011,8 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry, const char *t
 		goto out;
 	}
 
+	__lock_d_revalidate(dentry);
+
 	dir->i_version++;
 	dir->i_ctime = dir->i_mtime = dir->i_atime = ts;
 	if (IS_DIRSYNC(dir))
@@ -988,6 +1041,7 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry, const char *t
 	d_instantiate(dentry, inode);
 
 out:
+	__unlock_d_revalidate(dentry);
 	__unlock_super(sb);
 	PRINTK("exfat_symlink exited\n");
 	return err;
@@ -1026,6 +1080,9 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 			err = -EIO;
 		goto out;
 	}
+
+	__lock_d_revalidate(dentry);
+
 	dir->i_version++;
 	dir->i_ctime = dir->i_mtime = dir->i_atime = ts;
 	if (IS_DIRSYNC(dir))
@@ -1044,10 +1101,10 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	inode->i_version++;
 	inode->i_mtime = inode->i_atime = inode->i_ctime = ts;
 
-	dentry->d_time = dentry->d_parent->d_inode->i_version;
 	d_instantiate(dentry, inode);
 
 out:
+	__unlock_d_revalidate(dentry);
 	__unlock_super(sb);
 	PRINTK("exfat_mkdir exited\n");
 	return err;
@@ -1068,6 +1125,11 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 
 	EXFAT_I(inode)->fid.size = i_size_read(inode);
 
+	if (EXFAT_I(inode)->fid.dir.dir == DIR_DELETED) {
+		err = -ENOENT;
+		goto out;
+	}
+
 	err = FsRemoveDir(dir, &(EXFAT_I(inode)->fid));
 	if (err) {
 		if (err == FFS_INVALIDPATH)
@@ -1082,6 +1144,9 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 			err = -EIO;
 		goto out;
 	}
+
+	__lock_d_revalidate(dentry);
+
 	dir->i_version++;
 	dir->i_mtime = dir->i_atime = ts;
 	if (IS_DIRSYNC(dir))
@@ -1093,9 +1158,11 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 	clear_nlink(inode);
 	inode->i_mtime = inode->i_atime = ts;
 	exfat_detach(inode);
+	dentry->d_time = dir->i_version;
 	remove_inode_hash(inode);
 
 out:
+	__unlock_d_revalidate(dentry);
 	__unlock_super(sb);
 	PRINTK("exfat_rmdir exited\n");
 	return err;
@@ -1120,6 +1187,10 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 	ts = CURRENT_TIME_SEC;
 
 	EXFAT_I(old_inode)->fid.size = i_size_read(old_inode);
+	if (EXFAT_I(old_inode)->fid.dir.dir == DIR_DELETED) {
+		err = -ENOENT;
+		goto out;
+	}
 
 	err = FsMoveFile(old_dir, &(EXFAT_I(old_inode)->fid), new_dir, new_dentry);
 	if (err) {
@@ -1137,6 +1208,9 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 			err = -EIO;
 		goto out;
 	}
+
+	__lock_d_revalidate(old_dentry);
+	__lock_d_revalidate(new_dentry);
 	new_dir->i_version++;
 	new_dir->i_ctime = new_dir->i_mtime = new_dir->i_atime = ts;
 	if (IS_DIRSYNC(new_dir))
@@ -1168,13 +1242,18 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 	if (new_inode) {
 		exfat_detach(new_inode);
-		drop_nlink(new_inode);
-		if (S_ISDIR(new_inode->i_mode))
+
+		if (EXFAT_I(new_inode)->fid.dir.dir != DIR_DELETED) {
 			drop_nlink(new_inode);
+			if (S_ISDIR(new_inode->i_mode))
+				drop_nlink(new_inode);
+		}
 		new_inode->i_ctime = ts;
 	}
 
 out:
+	__unlock_d_revalidate(old_dentry);
+	__unlock_d_revalidate(new_dentry);
 	__unlock_super(sb);
 	PRINTK("exfat_rename exited\n");
 	return err;
@@ -2048,7 +2127,13 @@ static int exfat_statfs(struct dentry *dentry, struct kstatfs *buf)
 
 static int exfat_remount(struct super_block *sb, int *flags, char *data)
 {
+	char *orig_data = kstrdup(data, GFP_KERNEL);
 	*flags |= MS_NODIRATIME;
+
+	sync_filesystem(sb);
+
+	exfat_msg(sb, KERN_INFO, "re-mounted. Opts: %s", orig_data);
+	kfree(orig_data);
 	return 0;
 }
 
